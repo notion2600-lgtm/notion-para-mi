@@ -4,7 +4,7 @@ Aplicación web tipo Notion construida con Next.js 15, TypeScript, Tailwind CSS,
 shadcn/ui y Supabase. Incluye autenticación, esquema de base de datos con RLS,
 creación automática del primer workspace, navegación de páginas persistentes y
 un editor por bloques con archivos privados en Supabase Storage. También permite
-crear bases de datos con tablas y propiedades configurables.
+crear bases de datos con propiedades configurables y múltiples vistas persistentes.
 
 ## Requisitos
 
@@ -92,6 +92,13 @@ directamente en la tabla y también se abren como páginas. El panel de
 **Propiedades** permite añadir, renombrar, convertir, reordenar, ocultar y
 eliminar columnas; sus valores se guardan en `pages.properties`.
 
+Cada base de datos puede guardar varias vistas en pestañas: **Tabla**, **Tablero**,
+**Lista**, **Calendario** y **Galería**. Desde el panel **Vista** puedes combinar
+filtros con reglas Y/O, añadir varios ordenamientos, agrupar registros y elegir
+qué propiedades se muestran. El tablero permite mover tarjetas entre estados y
+el calendario permite arrastrarlas a otra fecha; la configuración se persiste en
+`db_views`.
+
 ## Verificaciones
 
 ```bash
@@ -103,7 +110,7 @@ npm run build
 
 - `app/`: rutas de la aplicación y callbacks de Auth
 - `components/editor/`: editor BlockNote, bloques personalizados y menciones
-- `components/database/`: tabla, celdas, propiedades y vista previa de filas
+- `components/database/`: vistas, filtros, tabla, celdas, propiedades y filas
 - `components/`: formularios, workspace y componentes shadcn/ui
 - `lib/supabase/`: clientes de navegador, servidor y middleware
 - `supabase/migrations/`: esquema versionado, triggers y políticas RLS

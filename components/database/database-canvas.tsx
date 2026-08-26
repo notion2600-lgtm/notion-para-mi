@@ -1,20 +1,52 @@
 "use client";
 
 import {
+  CalendarDays,
+  Columns3,
   ArrowDown,
   ArrowUp,
   ChevronRight,
   Eye,
   EyeOff,
+  GalleryVerticalEnd,
+  SquareKanban,
+  List,
   ListPlus,
   Maximize2,
   Plus,
+  SlidersHorizontal,
   Settings2,
   Table2,
   Trash2,
   X,
 } from "lucide-react";
 import {
+  DndContext,
+  type DragEndEvent,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  addDays,
+  addMonths,
+  addWeeks,
+  endOfMonth,
+  endOfWeek,
+  format,
+  isSameDay,
+  isSameMonth,
+  parseISO,
+  startOfMonth,
+  startOfWeek,
+  subMonths,
+  subWeeks,
+} from "date-fns";
+import { es } from "date-fns/locale";
+import {
+  type ReactNode,
   type PointerEvent as ReactPointerEvent,
   useEffect,
   useMemo,
@@ -26,11 +58,19 @@ import {
   DATABASE_PROPERTY_TYPES,
   useDatabaseProperties,
 } from "@/hooks/use-database-properties";
+import {
+  DATABASE_VIEW_TYPES,
+  useDatabaseViews,
+} from "@/hooks/use-database-views";
 import type {
+  DatabaseFilterOperator,
+  DatabaseFilterRule,
   DatabaseOption,
   DatabaseProperty,
   DatabasePropertyConfig,
   DatabasePropertyType,
+  DatabaseView,
+  DatabaseViewType,
   WorkspacePage,
 } from "@/lib/types";
 
@@ -42,6 +82,7 @@ export function DatabaseCanvas({
   onArchiveRows,
   onCreateRow,
   onOpenRow,
+  onResolveFileUrl,
   onUpdatePage,
   pages,
   rows,
@@ -51,6 +92,7 @@ export function DatabaseCanvas({
   onArchiveRows: (rowIds: string[]) => Promise<boolean>;
   onCreateRow: () => Promise<WorkspacePage | null>;
   onOpenRow: (rowId: string) => void;
+  onResolveFileUrl: (path: string) => Promise<string>;
   onUpdatePage: (pageId: string, changes: Partial<WorkspacePage>) => Promise<boolean>;
   pages: WorkspacePage[];
   rows: WorkspacePage[];
@@ -63,16 +105,34 @@ export function DatabaseCanvas({
     properties,
     updateProperty,
   } = useDatabaseProperties(database.id);
+  const {
+    createView,
+    deleteView,
+    isLoading: viewsLoading,
+    updateView,
+    views,
+  } = useDatabaseViews(database.id);
   const [title, setTitle] = useState(database.title);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
+  const [viewControlsOpen, setViewControlsOpen] = useState(false);
+  const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  const [activeViewId, setActiveViewId] = useState<string | null>(null);
   const [newPropertyType, setNewPropertyType] =
     useState<DatabasePropertyType>("text");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [peekRowId, setPeekRowId] = useState<string | null>(null);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
-  const visibleProperties = useMemo(
-    () => properties.filter((property) => !property.config.hidden),
-    [properties],
+  const activeView =
+    views.find((view) => view.id === activeViewId) ?? views[0] ?? null;
+  const visibleProperties = useMemo(() => {
+    const globallyVisible = properties.filter((property) => !property.config.hidden);
+    if (!activeView?.visible_properties.length) return globallyVisible;
+    const visible = new Set(activeView.visible_properties);
+    return globallyVisible.filter((property) => visible.has(property.id));
+  }, [activeView, properties]);
+  const processedRows = useMemo(
+    () => applyView(rows, properties, activeView),
+    [activeView, properties, rows],
   );
   const peekRow = rows.find((row) => row.id === peekRowId) ?? null;
   const titleWidth =
@@ -82,6 +142,11 @@ export function DatabaseCanvas({
       : 280);
 
   useEffect(() => setTitle(database.title), [database.id, database.title]);
+  useEffect(() => {
+    setActiveViewId((current) =>
+      views.some((view) => view.id === current) ? current : (views[0]?.id ?? null),
+    );
+  }, [database.id, views]);
   useEffect(() => {
     setSelected((current) => {
       const valid = new Set(rows.map((row) => row.id));
@@ -134,10 +199,63 @@ export function DatabaseCanvas({
         value={title}
       />
 
-      <div className="mt-8 flex min-h-9 flex-wrap items-center gap-2">
-        <div className="flex items-center gap-2 rounded-md bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-600">
-          <Table2 className="size-3.5" /> Tabla
+      <div className="mt-8 flex min-h-10 flex-wrap items-center gap-1 border-b">
+        {views.map((view) => (
+          <button
+            className={`flex h-10 items-center gap-2 border-b-2 px-3 text-xs font-medium transition-colors ${
+              activeView?.id === view.id
+                ? "border-indigo-500 text-zinc-900"
+                : "border-transparent text-zinc-500 hover:text-zinc-800"
+            }`}
+            key={view.id}
+            onClick={() => setActiveViewId(view.id)}
+            type="button"
+          >
+            <ViewTypeIcon type={view.type} /> {view.name}
+          </button>
+        ))}
+        <div className="relative">
+          <button
+            aria-label="Añadir vista"
+            className="grid size-8 place-items-center rounded-md text-zinc-500 hover:bg-zinc-100"
+            onClick={() => setViewMenuOpen((open) => !open)}
+            type="button"
+          >
+            <Plus className="size-4" />
+          </button>
+          {viewMenuOpen && (
+            <div className="absolute left-0 top-9 z-30 w-44 rounded-lg border bg-white p-1 shadow-xl">
+              {DATABASE_VIEW_TYPES.map((viewType) => (
+                <button
+                  className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-xs hover:bg-zinc-100"
+                  key={viewType.value}
+                  onClick={async () => {
+                    const view = await createView(viewType.value);
+                    if (view) setActiveViewId(view.id);
+                    setViewMenuOpen(false);
+                  }}
+                  type="button"
+                >
+                  <ViewTypeIcon type={viewType.value} /> {viewType.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            className="flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+            onClick={() => setViewControlsOpen((open) => !open)}
+            type="button"
+          >
+            <SlidersHorizontal className="size-3.5" /> Vista
+            {activeView &&
+              (activeView.filters.rules.length > 0 || activeView.sorts.length > 0) && (
+                <span className="rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] text-indigo-600">
+                  {activeView.filters.rules.length + activeView.sorts.length}
+                </span>
+              )}
+          </button>
         <button
           className="flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
           onClick={() => setPropertiesOpen((open) => !open)}
@@ -148,8 +266,9 @@ export function DatabaseCanvas({
             {properties.length}
           </span>
         </button>
+        </div>
         {selected.size > 0 && (
-          <div className="ml-auto flex items-center gap-2 rounded-lg border bg-white px-2 py-1 shadow-sm">
+          <div className="flex items-center gap-2 rounded-lg border bg-white px-2 py-1 shadow-sm">
             <span className="px-1 text-xs font-medium">{selected.size} seleccionadas</span>
             <Button onClick={() => void archiveSelected()} size="sm" variant="destructive">
               <Trash2 className="size-3.5" /> Archivar
@@ -178,105 +297,207 @@ export function DatabaseCanvas({
         />
       )}
 
-      <div className="mt-3 overflow-x-auto rounded-xl border bg-white">
-        <table className="w-max min-w-full border-collapse text-sm">
-          <colgroup>
-            <col style={{ width: 42 }} />
-            <col style={{ width: titleWidth }} />
-            {visibleProperties.map((property) => (
-              <col
-                key={property.id}
-                style={{
-                  width:
-                    columnWidths[property.id] ?? property.config.width ?? 180,
-                }}
+      {viewControlsOpen && activeView && (
+        <ViewControls
+          currentUser={currentUser}
+          onDelete={async () => {
+            const deleted = await deleteView(activeView.id);
+            if (deleted) setViewControlsOpen(false);
+          }}
+          onUpdate={(changes) => updateView(activeView.id, changes)}
+          properties={properties}
+          pages={pages}
+          view={activeView}
+        />
+      )}
+
+      {activeView && (
+        <DatabaseViewSurface
+          columnWidths={columnWidths}
+          currentUser={currentUser}
+          database={database}
+          onCreateRow={onCreateRow}
+          onOpenRow={(rowId) => setPeekRowId(rowId)}
+          onResolveFileUrl={onResolveFileUrl}
+          onResizeColumn={(propertyId, width) =>
+            setColumnWidths((current) => ({ ...current, [propertyId]: width }))
+          }
+          onToggleRow={toggleRow}
+          onUpdatePage={onUpdatePage}
+          onUpdateProperty={updateProperty}
+          onUpdateView={(changes) => updateView(activeView.id, changes)}
+          pages={pages}
+          properties={properties}
+          rows={processedRows}
+          selected={selected}
+          setSelected={setSelected}
+          titleWidth={titleWidth}
+          updateCell={updateCell}
+          view={activeView}
+          visibleProperties={visibleProperties}
+        />
+      )}
+
+      {(isLoading || viewsLoading) && (
+        <p className="mt-3 text-xs text-zinc-400">Cargando base de datos…</p>
+      )}
+
+      {peekRow && (
+        <RowPeek
+          currentUser={currentUser}
+          onClose={() => setPeekRowId(null)}
+          onOpenFull={() => onOpenRow(peekRow.id)}
+          onUpdatePage={onUpdatePage}
+          pages={pages}
+          properties={properties}
+          row={peekRow}
+        />
+      )}
+    </section>
+  );
+}
+
+type ViewSurfaceProps = {
+  columnWidths: Record<string, number>;
+  currentUser: { id: string; label: string };
+  database: WorkspacePage;
+  onCreateRow: () => Promise<WorkspacePage | null>;
+  onOpenRow: (rowId: string) => void;
+  onResolveFileUrl: (path: string) => Promise<string>;
+  onResizeColumn: (propertyId: string, width: number) => void;
+  onToggleRow: (rowId: string) => void;
+  onUpdatePage: (pageId: string, changes: Partial<WorkspacePage>) => Promise<boolean>;
+  onUpdateProperty: (
+    propertyId: string,
+    changes: Partial<Pick<DatabaseProperty, "config" | "name" | "position" | "type">>,
+  ) => Promise<boolean>;
+  onUpdateView: (
+    changes: Partial<Pick<DatabaseView, "filters" | "group_by" | "name" | "sorts" | "type" | "visible_properties">>,
+  ) => Promise<boolean>;
+  pages: WorkspacePage[];
+  properties: DatabaseProperty[];
+  rows: WorkspacePage[];
+  selected: Set<string>;
+  setSelected: (selected: Set<string>) => void;
+  titleWidth: number;
+  updateCell: (row: WorkspacePage, propertyId: string, value: unknown) => Promise<boolean>;
+  view: DatabaseView;
+  visibleProperties: DatabaseProperty[];
+};
+
+function DatabaseViewSurface(props: ViewSurfaceProps) {
+  if (props.view.type === "board") return <BoardView {...props} />;
+  if (props.view.type === "list") return <ListView {...props} />;
+  if (props.view.type === "calendar") return <CalendarView {...props} />;
+  if (props.view.type === "gallery") return <GalleryView {...props} />;
+  return <TableView {...props} />;
+}
+
+function TableView({
+  columnWidths,
+  currentUser,
+  database,
+  onCreateRow,
+  onOpenRow,
+  onResizeColumn,
+  onToggleRow,
+  onUpdatePage,
+  onUpdateProperty,
+  pages,
+  properties,
+  rows,
+  selected,
+  setSelected,
+  titleWidth,
+  updateCell,
+  view,
+  visibleProperties,
+}: ViewSurfaceProps) {
+  const groups = groupRows(rows, view.group_by, properties, currentUser, pages);
+  return (
+    <div className="mt-3 overflow-x-auto rounded-xl border bg-white">
+      <table className="w-max min-w-full border-collapse text-sm">
+        <colgroup>
+          <col style={{ width: 42 }} />
+          <col style={{ width: titleWidth }} />
+          {visibleProperties.map((property) => (
+            <col
+              key={property.id}
+              style={{ width: columnWidths[property.id] ?? property.config.width ?? 180 }}
+            />
+          ))}
+          <col style={{ width: 42 }} />
+        </colgroup>
+        <thead>
+          <tr className="h-10 bg-zinc-50 text-left text-xs font-medium text-zinc-500">
+            <th className="border-b border-r px-3">
+              <input
+                aria-label="Seleccionar todas las filas visibles"
+                checked={rows.length > 0 && rows.every((row) => selected.has(row.id))}
+                onChange={(event) =>
+                  setSelected(event.target.checked ? new Set(rows.map((row) => row.id)) : new Set())
+                }
+                type="checkbox"
               />
-            ))}
-            <col style={{ width: 42 }} />
-          </colgroup>
-          <thead>
-            <tr className="h-10 bg-zinc-50 text-left text-xs font-medium text-zinc-500">
-              <th className="border-b border-r px-3">
-                <input
-                  aria-label="Seleccionar todas las filas"
-                  checked={rows.length > 0 && selected.size === rows.length}
-                  onChange={(event) =>
-                    setSelected(
-                      event.target.checked
-                        ? new Set(rows.map((row) => row.id))
-                        : new Set(),
-                    )
-                  }
-                  type="checkbox"
-                />
-              </th>
-              <th className="relative border-b border-r px-3">
-                Nombre
-                <ColumnResizeHandle
-                  onCommit={(width) =>
-                    void onUpdatePage(database.id, {
-                      properties: {
-                        ...database.properties,
-                        _title_width: width,
-                      },
-                    })
-                  }
-                  onResize={(width) =>
-                    setColumnWidths((current) => ({ ...current, __title: width }))
-                  }
-                  width={titleWidth}
-                />
-              </th>
-              {visibleProperties.map((property) => {
-                const width =
-                  columnWidths[property.id] ?? property.config.width ?? 180;
-                return (
-                  <th className="relative border-b border-r px-3" key={property.id}>
-                    <span className="mr-2">{propertyTypeIcon(property.type)}</span>
-                    {property.name}
-                    <ColumnResizeHandle
-                      onCommit={(nextWidth) =>
-                        void updateProperty(property.id, {
-                          config: { ...property.config, width: nextWidth },
-                        })
-                      }
-                      onResize={(nextWidth) =>
-                        setColumnWidths((current) => ({
-                          ...current,
-                          [property.id]: nextWidth,
-                        }))
-                      }
-                      width={width}
-                    />
-                  </th>
-                );
-              })}
-              <th className="border-b px-2 text-center">
-                <button
-                  aria-label="Añadir propiedad"
-                  className="grid size-7 place-items-center rounded hover:bg-zinc-200"
-                  onClick={() => setPropertiesOpen(true)}
-                  type="button"
+            </th>
+            <th className="relative border-b border-r px-3">
+              Nombre
+              <ColumnResizeHandle
+                onCommit={(width) =>
+                  void onUpdatePage(database.id, {
+                    properties: { ...database.properties, _title_width: width },
+                  })
+                }
+                onResize={(width) => onResizeColumn("__title", width)}
+                width={titleWidth}
+              />
+            </th>
+            {visibleProperties.map((property) => {
+              const width = columnWidths[property.id] ?? property.config.width ?? 180;
+              return (
+                <th className="relative border-b border-r px-3" key={property.id}>
+                  <span className="mr-2">{propertyTypeIcon(property.type)}</span>
+                  {property.name}
+                  <ColumnResizeHandle
+                    onCommit={(nextWidth) =>
+                      void onUpdateProperty(property.id, {
+                        config: { ...property.config, width: nextWidth },
+                      })
+                    }
+                    onResize={(nextWidth) => onResizeColumn(property.id, nextWidth)}
+                    width={width}
+                  />
+                </th>
+              );
+            })}
+            <th className="border-b px-2" />
+          </tr>
+        </thead>
+        {groups.map((group) => (
+          <tbody key={group.key}>
+            {group.label && (
+              <tr>
+                <td
+                  className="border-b bg-zinc-50 px-3 py-2 text-xs font-semibold text-zinc-600"
+                  colSpan={visibleProperties.length + 3}
                 >
-                  <Plus className="size-3.5" />
-                </button>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
+                  {group.label} <span className="ml-1 text-zinc-400">{group.rows.length}</span>
+                </td>
+              </tr>
+            )}
+            {group.rows.map((row) => (
               <tr className="group h-10 hover:bg-zinc-50/80" key={row.id}>
                 <td className="border-b border-r px-3">
                   <input
                     aria-label={`Seleccionar ${row.title}`}
                     checked={selected.has(row.id)}
-                    onChange={() => toggleRow(row.id)}
+                    onChange={() => onToggleRow(row.id)}
                     type="checkbox"
                   />
                 </td>
                 <td className="border-b border-r p-0">
                   <RowTitleCell
-                    onOpen={() => setPeekRowId(row.id)}
+                    onOpen={() => onOpenRow(row.id)}
                     onUpdate={(value) => onUpdatePage(row.id, { title: value })}
                     row={row}
                   />
@@ -297,7 +518,7 @@ export function DatabaseCanvas({
                   <button
                     aria-label={`Abrir ${row.title}`}
                     className="grid size-7 place-items-center rounded opacity-0 hover:bg-zinc-100 group-hover:opacity-100"
-                    onClick={() => setPeekRowId(row.id)}
+                    onClick={() => onOpenRow(row.id)}
                     type="button"
                   >
                     <ChevronRight className="size-4" />
@@ -305,44 +526,790 @@ export function DatabaseCanvas({
                 </td>
               </tr>
             ))}
-            {rows.length === 0 && (
-              <tr>
-                <td
-                  className="py-12 text-center text-sm text-zinc-400"
-                  colSpan={visibleProperties.length + 3}
-                >
-                  Aún no hay filas. Crea la primera para comenzar.
-                </td>
-              </tr>
-            )}
           </tbody>
-        </table>
+        ))}
+      </table>
+      <EmptyRows rows={rows} />
+      <NewRowButton onCreateRow={onCreateRow} />
+    </div>
+  );
+}
+
+function ListView({
+  currentUser,
+  onCreateRow,
+  onOpenRow,
+  pages,
+  properties,
+  rows,
+  view,
+  visibleProperties,
+}: ViewSurfaceProps) {
+  const groups = groupRows(rows, view.group_by, properties, currentUser, pages);
+  return (
+    <div className="mt-3 overflow-hidden rounded-xl border bg-white">
+      {groups.map((group) => (
+        <div key={group.key}>
+          {group.label && (
+            <div className="border-b bg-zinc-50 px-4 py-2 text-xs font-semibold text-zinc-600">
+              {group.label} <span className="ml-1 text-zinc-400">{group.rows.length}</span>
+            </div>
+          )}
+          {group.rows.map((row) => (
+            <button
+              className="group flex w-full items-center gap-3 border-b px-4 py-3 text-left hover:bg-zinc-50"
+              key={row.id}
+              onClick={() => onOpenRow(row.id)}
+              type="button"
+            >
+              <span className="text-lg">{row.icon || "📄"}</span>
+              <span className="min-w-0 flex-1 truncate text-sm font-medium">{row.title}</span>
+              {visibleProperties.slice(0, 4).map((property) => (
+                <span className="max-w-40 truncate text-xs text-zinc-500" key={property.id}>
+                  {propertyDisplayValue(row, property, currentUser, pages)}
+                </span>
+              ))}
+              <ChevronRight className="size-4 text-zinc-300 group-hover:text-zinc-600" />
+            </button>
+          ))}
+        </div>
+      ))}
+      <EmptyRows rows={rows} />
+      <NewRowButton onCreateRow={onCreateRow} />
+    </div>
+  );
+}
+
+function BoardView({
+  currentUser,
+  onCreateRow,
+  onOpenRow,
+  pages,
+  properties,
+  rows,
+  updateCell,
+  view,
+  visibleProperties,
+}: ViewSurfaceProps) {
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const groupProperty =
+    properties.find(
+      (property) =>
+        property.id === view.group_by &&
+        ["select", "status", "person"].includes(property.type),
+    ) ?? null;
+  const groups = boardGroups(groupProperty, currentUser);
+
+  if (!groupProperty) {
+    return (
+      <ViewSetupMessage>
+        Elige una propiedad de selección, estado o persona en <strong>Vista → Agrupar</strong>
+        para organizar el tablero.
+      </ViewSetupMessage>
+    );
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const rowId = event.active.data.current?.rowId;
+    const groupValue = event.over?.data.current?.groupValue;
+    if (typeof rowId !== "string" || groupValue === undefined) return;
+    const row = rows.find((item) => item.id === rowId);
+    if (row) void updateCell(row, groupProperty!.id, groupValue || null);
+  }
+
+  return (
+    <DndContext onDragEnd={handleDragEnd} sensors={sensors}>
+      <div className="mt-3 flex min-h-[420px] gap-3 overflow-x-auto pb-3">
+        {groups.map((group) => (
+          <BoardColumn
+            currentUser={currentUser}
+            group={group}
+            key={group.key}
+            onOpenRow={onOpenRow}
+            pages={pages}
+            properties={visibleProperties}
+            rows={rows.filter(
+              (row) => String(row.properties[groupProperty.id] ?? "") === group.value,
+            )}
+          />
+        ))}
         <button
-          className="flex h-10 w-full items-center gap-2 border-t px-4 text-sm text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800"
+          className="flex h-10 min-w-64 items-center gap-2 rounded-lg px-3 text-sm text-zinc-500 hover:bg-zinc-100"
           onClick={() => void onCreateRow()}
           type="button"
         >
-          <Plus className="size-4" /> Nueva fila
+          <Plus className="size-4" /> Nueva tarjeta
         </button>
       </div>
+    </DndContext>
+  );
+}
 
-      {isLoading && (
-        <p className="mt-3 text-xs text-zinc-400">Cargando propiedades…</p>
-      )}
-
-      {peekRow && (
-        <RowPeek
-          currentUser={currentUser}
-          onClose={() => setPeekRowId(null)}
-          onOpenFull={() => onOpenRow(peekRow.id)}
-          onUpdatePage={onUpdatePage}
-          pages={pages}
-          properties={properties}
-          row={peekRow}
-        />
-      )}
+function BoardColumn({
+  currentUser,
+  group,
+  onOpenRow,
+  pages,
+  properties,
+  rows,
+}: {
+  currentUser: { id: string; label: string };
+  group: { key: string; label: string; value: string };
+  onOpenRow: (rowId: string) => void;
+  pages: WorkspacePage[];
+  properties: DatabaseProperty[];
+  rows: WorkspacePage[];
+}) {
+  const { isOver, setNodeRef } = useDroppable({
+    data: { groupValue: group.value },
+    id: `board-group:${group.key}`,
+  });
+  return (
+    <section
+      className={`w-72 shrink-0 rounded-xl bg-zinc-100/80 p-2 transition-colors ${
+        isOver ? "bg-indigo-50 ring-2 ring-indigo-300" : ""
+      }`}
+      ref={setNodeRef}
+    >
+      <div className="flex items-center gap-2 px-1 py-2 text-xs font-semibold text-zinc-600">
+        <span className="size-2 rounded-full bg-zinc-400" /> {group.label}
+        <span className="ml-auto text-zinc-400">{rows.length}</span>
+      </div>
+      <div className="space-y-2">
+        {rows.map((row) => (
+          <BoardCard
+            currentUser={currentUser}
+            key={row.id}
+            onOpen={() => onOpenRow(row.id)}
+            pages={pages}
+            properties={properties}
+            row={row}
+          />
+        ))}
+      </div>
     </section>
   );
+}
+
+function BoardCard({
+  currentUser,
+  onOpen,
+  pages,
+  properties,
+  row,
+}: {
+  currentUser: { id: string; label: string };
+  onOpen: () => void;
+  pages: WorkspacePage[];
+  properties: DatabaseProperty[];
+  row: WorkspacePage;
+}) {
+  const { attributes, isDragging, listeners, setNodeRef, transform } = useDraggable({
+    data: { rowId: row.id },
+    id: `board-card:${row.id}`,
+  });
+  return (
+    <article
+      className={`cursor-grab rounded-lg border bg-white p-3 shadow-sm ${isDragging ? "opacity-50" : ""}`}
+      ref={setNodeRef}
+      style={{ transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined }}
+      {...attributes}
+      {...listeners}
+    >
+      <button className="w-full text-left text-sm font-medium" onClick={onOpen} type="button">
+        {row.icon || "📄"} {row.title}
+      </button>
+      <div className="mt-2 space-y-1">
+        {properties.slice(0, 3).map((property) => (
+          <div className="truncate text-xs text-zinc-500" key={property.id}>
+            <span className="mr-1 text-zinc-400">{property.name}:</span>
+            {propertyDisplayValue(row, property, currentUser, pages)}
+          </div>
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function CalendarView({
+  currentUser,
+  onCreateRow,
+  onOpenRow,
+  pages,
+  properties,
+  rows,
+  updateCell,
+  view,
+}: ViewSurfaceProps) {
+  const [cursor, setCursor] = useState(() => new Date());
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const dateProperty =
+    properties.find((property) => property.id === view.group_by && property.type === "date") ??
+    properties.find((property) => property.type === "date") ??
+    null;
+  const mode = view.filters.calendarMode ?? "month";
+
+  if (!dateProperty) {
+    return (
+      <ViewSetupMessage>
+        Añade una propiedad de fecha y selecciónala en <strong>Vista → Fecha del calendario</strong>.
+      </ViewSetupMessage>
+    );
+  }
+
+  const periodStart =
+    mode === "week"
+      ? startOfWeek(cursor, { weekStartsOn: 1 })
+      : startOfWeek(startOfMonth(cursor), { weekStartsOn: 1 });
+  const periodEnd =
+    mode === "week"
+      ? endOfWeek(cursor, { weekStartsOn: 1 })
+      : endOfWeek(endOfMonth(cursor), { weekStartsOn: 1 });
+  const days: Date[] = [];
+  for (let day = periodStart; day <= periodEnd; day = addDays(day, 1)) days.push(day);
+  const undated = rows.filter((row) => !dateStart(row.properties[dateProperty.id]));
+
+  function handleDragEnd(event: DragEndEvent) {
+    const rowId = event.active.data.current?.rowId;
+    const date = event.over?.data.current?.date;
+    if (typeof rowId !== "string" || typeof date !== "string") return;
+    const row = rows.find((item) => item.id === rowId);
+    if (!row) return;
+    const existingValue = row.properties[dateProperty!.id];
+    const previous: Record<string, unknown> = isRecord(existingValue) ? existingValue : {};
+    void updateCell(row, dateProperty!.id, { ...previous, start: date });
+  }
+
+  return (
+    <DndContext onDragEnd={handleDragEnd} sensors={sensors}>
+      <div className="mt-3 overflow-hidden rounded-xl border bg-white">
+        <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2">
+          <button
+            className="rounded-md px-2 py-1 text-xs hover:bg-zinc-100"
+            onClick={() => setCursor(new Date())}
+            type="button"
+          >
+            Hoy
+          </button>
+          <button
+            aria-label="Periodo anterior"
+            className="grid size-7 place-items-center rounded hover:bg-zinc-100"
+            onClick={() => setCursor(mode === "week" ? subWeeks(cursor, 1) : subMonths(cursor, 1))}
+            type="button"
+          >
+            <ChevronRight className="size-4 rotate-180" />
+          </button>
+          <button
+            aria-label="Periodo siguiente"
+            className="grid size-7 place-items-center rounded hover:bg-zinc-100"
+            onClick={() => setCursor(mode === "week" ? addWeeks(cursor, 1) : addMonths(cursor, 1))}
+            type="button"
+          >
+            <ChevronRight className="size-4" />
+          </button>
+          <strong className="ml-1 text-sm capitalize">
+            {mode === "week"
+              ? `${format(periodStart, "d MMM", { locale: es })} – ${format(periodEnd, "d MMM yyyy", { locale: es })}`
+              : format(cursor, "MMMM yyyy", { locale: es })}
+          </strong>
+          <span className="ml-auto text-xs text-zinc-500">Arrastra una tarjeta para cambiar su fecha</span>
+        </div>
+        <div className="grid grid-cols-7 border-b bg-zinc-50 text-center text-[11px] font-medium uppercase text-zinc-500">
+          {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((day) => (
+            <div className="border-r py-2 last:border-r-0" key={day}>{day}</div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7">
+          {days.map((day) => (
+            <CalendarDay
+              currentUser={currentUser}
+              day={day}
+              inMonth={mode === "week" || isSameMonth(day, cursor)}
+              key={day.toISOString()}
+              onOpenRow={onOpenRow}
+              pages={pages}
+              rows={rows.filter((row) => {
+                const value = dateStart(row.properties[dateProperty.id]);
+                return value ? isSameDay(parseISO(value), day) : false;
+              })}
+            />
+          ))}
+        </div>
+        {undated.length > 0 && (
+          <div className="border-t bg-zinc-50 p-3">
+            <div className="mb-2 text-xs font-semibold text-zinc-500">Sin fecha</div>
+            <div className="flex flex-wrap gap-2">
+              {undated.map((row) => (
+                <CalendarEvent key={row.id} onOpen={() => onOpenRow(row.id)} row={row} />
+              ))}
+            </div>
+          </div>
+        )}
+        <NewRowButton onCreateRow={onCreateRow} />
+      </div>
+    </DndContext>
+  );
+}
+
+function CalendarDay({
+  day,
+  inMonth,
+  onOpenRow,
+  rows,
+}: {
+  currentUser: { id: string; label: string };
+  day: Date;
+  inMonth: boolean;
+  onOpenRow: (rowId: string) => void;
+  pages: WorkspacePage[];
+  rows: WorkspacePage[];
+}) {
+  const date = format(day, "yyyy-MM-dd");
+  const { isOver, setNodeRef } = useDroppable({ data: { date }, id: `calendar-day:${date}` });
+  return (
+    <div
+      className={`min-h-28 border-b border-r p-1.5 transition-colors ${
+        inMonth ? "bg-white" : "bg-zinc-50 text-zinc-300"
+      } ${isOver ? "bg-indigo-50 ring-2 ring-inset ring-indigo-300" : ""}`}
+      ref={setNodeRef}
+    >
+      <div className={`mb-1 text-right text-xs ${isSameDay(day, new Date()) ? "font-bold text-indigo-600" : ""}`}>
+        {format(day, "d")}
+      </div>
+      <div className="space-y-1">
+        {rows.map((row) => (
+          <CalendarEvent key={row.id} onOpen={() => onOpenRow(row.id)} row={row} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CalendarEvent({ onOpen, row }: { onOpen: () => void; row: WorkspacePage }) {
+  const { attributes, isDragging, listeners, setNodeRef, transform } = useDraggable({
+    data: { rowId: row.id },
+    id: `calendar-event:${row.id}`,
+  });
+  return (
+    <button
+      className={`block w-full cursor-grab truncate rounded bg-indigo-50 px-2 py-1 text-left text-[11px] font-medium text-indigo-800 ${
+        isDragging ? "opacity-50" : ""
+      }`}
+      onClick={onOpen}
+      ref={setNodeRef}
+      style={{ transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined }}
+      type="button"
+      {...attributes}
+      {...listeners}
+    >
+      {row.icon || "📄"} {row.title}
+    </button>
+  );
+}
+
+function GalleryView({
+  currentUser,
+  onCreateRow,
+  onOpenRow,
+  onResolveFileUrl,
+  pages,
+  properties,
+  rows,
+  view,
+  visibleProperties,
+}: ViewSurfaceProps) {
+  const groups = groupRows(rows, view.group_by, properties, currentUser, pages);
+  return (
+    <div className="mt-3 space-y-4">
+      {groups.map((group) => (
+        <section key={group.key}>
+          {group.label && (
+            <div className="mb-2 text-xs font-semibold text-zinc-600">
+              {group.label} <span className="ml-1 text-zinc-400">{group.rows.length}</span>
+            </div>
+          )}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {group.rows.map((row) => (
+              <button
+                className="overflow-hidden rounded-xl border bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                key={row.id}
+                onClick={() => onOpenRow(row.id)}
+                type="button"
+              >
+                <CoverPreview path={row.cover_url} resolveFileUrl={onResolveFileUrl} />
+                <div className="p-3">
+                  <div className="truncate text-sm font-semibold">{row.icon || "📄"} {row.title}</div>
+                  <div className="mt-2 space-y-1">
+                    {visibleProperties.slice(0, 4).map((property) => (
+                      <div className="flex gap-2 text-xs" key={property.id}>
+                        <span className="shrink-0 text-zinc-400">{property.name}</span>
+                        <span className="min-w-0 truncate text-zinc-600">
+                          {propertyDisplayValue(row, property, currentUser, pages)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      ))}
+      <EmptyRows rows={rows} />
+      <button
+        className="flex h-10 items-center gap-2 rounded-lg px-3 text-sm text-zinc-500 hover:bg-zinc-100"
+        onClick={() => void onCreateRow()}
+        type="button"
+      >
+        <Plus className="size-4" /> Nueva tarjeta
+      </button>
+    </div>
+  );
+}
+
+function CoverPreview({
+  path,
+  resolveFileUrl,
+}: {
+  path: string | null;
+  resolveFileUrl: (path: string) => Promise<string>;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    if (!path) {
+      setUrl(null);
+      return;
+    }
+    void resolveFileUrl(path)
+      .then((nextUrl) => {
+        if (active) setUrl(nextUrl);
+      })
+      .catch(() => {
+        if (active) setUrl(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [path, resolveFileUrl]);
+  return (
+    <div
+      className="h-32 bg-gradient-to-br from-indigo-50 to-zinc-100 bg-cover bg-center"
+      style={url ? { backgroundImage: `url(${JSON.stringify(url)})` } : undefined}
+    />
+  );
+}
+
+function ViewControls({
+  currentUser,
+  onDelete,
+  onUpdate,
+  pages,
+  properties,
+  view,
+}: {
+  currentUser: { id: string; label: string };
+  onDelete: () => Promise<void>;
+  onUpdate: (
+    changes: Partial<Pick<DatabaseView, "filters" | "group_by" | "name" | "sorts" | "type" | "visible_properties">>,
+  ) => Promise<boolean>;
+  pages: WorkspacePage[];
+  properties: DatabaseProperty[];
+  view: DatabaseView;
+}) {
+  const filters = normalizeFilters(view.filters);
+  const groupCandidates =
+    view.type === "board"
+      ? properties.filter((property) => ["select", "status", "person"].includes(property.type))
+      : view.type === "calendar"
+        ? properties.filter((property) => property.type === "date")
+        : properties;
+  const visible = view.visible_properties.length
+    ? new Set(view.visible_properties)
+    : new Set(properties.filter((property) => !property.config.hidden).map((property) => property.id));
+
+  function updateFilter(ruleId: string, changes: Partial<DatabaseFilterRule>) {
+    void onUpdate({
+      filters: {
+        ...filters,
+        rules: filters.rules.map((rule) => (rule.id === ruleId ? { ...rule, ...changes } : rule)),
+      },
+    });
+  }
+
+  return (
+    <div className="mt-3 rounded-xl border bg-zinc-50/80 p-3 text-xs">
+      <div className="grid gap-3 border-b pb-3 md:grid-cols-3">
+        <label className="space-y-1 text-zinc-500">
+          <span>Nombre de la vista</span>
+          <input
+            className="h-9 w-full rounded-md border bg-white px-2 text-zinc-900"
+            defaultValue={view.name}
+            key={view.name}
+            onBlur={(event) => {
+              const name = event.target.value.trim() || "Vista";
+              if (name !== view.name) void onUpdate({ name });
+            }}
+          />
+        </label>
+        <label className="space-y-1 text-zinc-500">
+          <span>Tipo</span>
+          <select
+            className="h-9 w-full rounded-md border bg-white px-2 text-zinc-900"
+            onChange={(event) =>
+              void onUpdate({ group_by: null, type: event.target.value as DatabaseViewType })
+            }
+            value={view.type}
+          >
+            {DATABASE_VIEW_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+          </select>
+        </label>
+        <label className="space-y-1 text-zinc-500">
+          <span>{view.type === "calendar" ? "Fecha del calendario" : "Agrupar"}</span>
+          <select
+            className="h-9 w-full rounded-md border bg-white px-2 text-zinc-900"
+            onChange={(event) => void onUpdate({ group_by: event.target.value || null })}
+            value={view.group_by ?? ""}
+          >
+            <option value="">Sin agrupación</option>
+            {groupCandidates.map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}
+          </select>
+        </label>
+      </div>
+
+      {view.type === "calendar" && (
+        <div className="flex items-center gap-2 border-b py-3">
+          <span className="font-medium text-zinc-600">Escala</span>
+          {(["month", "week"] as const).map((mode) => (
+            <button
+              className={`rounded-md px-2 py-1 ${filters.calendarMode === mode || (!filters.calendarMode && mode === "month") ? "bg-white shadow-sm" : "text-zinc-500"}`}
+              key={mode}
+              onClick={() => void onUpdate({ filters: { ...filters, calendarMode: mode } })}
+              type="button"
+            >
+              {mode === "month" ? "Mes" : "Semana"}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="grid gap-4 py-3 lg:grid-cols-2">
+        <section>
+          <div className="mb-2 flex items-center gap-2 font-semibold text-zinc-700">
+            Filtros
+            <select
+              className="ml-auto h-7 rounded border bg-white px-1 font-normal"
+              onChange={(event) =>
+                void onUpdate({ filters: { ...filters, mode: event.target.value as "and" | "or" } })
+              }
+              value={filters.mode}
+            >
+              <option value="and">Cumplir todas (Y)</option>
+              <option value="or">Cumplir alguna (O)</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            {filters.rules.map((rule) => {
+              const property = properties.find((item) => item.id === rule.property_id);
+              const type = rule.property_id === "__title" ? "text" : property?.type ?? "text";
+              return (
+                <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-1" key={rule.id}>
+                  <select
+                    className="h-8 min-w-0 rounded border bg-white px-1"
+                    onChange={(event) => {
+                      const propertyId = event.target.value;
+                      const nextProperty = properties.find((item) => item.id === propertyId);
+                      const nextType = propertyId === "__title" ? "text" : nextProperty?.type ?? "text";
+                      updateFilter(rule.id, {
+                        operator: operatorsForType(nextType)[0].value,
+                        property_id: propertyId,
+                        value: "",
+                      });
+                    }}
+                    value={rule.property_id}
+                  >
+                    <option value="__title">Nombre</option>
+                    {properties.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                  </select>
+                  <select
+                    className="h-8 min-w-0 rounded border bg-white px-1"
+                    onChange={(event) => updateFilter(rule.id, { operator: event.target.value as DatabaseFilterOperator })}
+                    value={rule.operator}
+                  >
+                    {operatorsForType(type).map((operator) => <option key={operator.value} value={operator.value}>{operator.label}</option>)}
+                  </select>
+                  <FilterValueInput
+                    currentUser={currentUser}
+                    onChange={(value) => updateFilter(rule.id, { value })}
+                    operator={rule.operator}
+                    pages={pages}
+                    property={property}
+                    value={rule.value}
+                  />
+                  <button
+                    aria-label="Eliminar filtro"
+                    className="grid size-8 place-items-center rounded hover:bg-red-50 hover:text-red-600"
+                    onClick={() => void onUpdate({ filters: { ...filters, rules: filters.rules.filter((item) => item.id !== rule.id) } })}
+                    type="button"
+                  ><X className="size-3.5" /></button>
+                </div>
+              );
+            })}
+          </div>
+          <button
+            className="mt-2 flex items-center gap-1 rounded px-2 py-1 text-zinc-500 hover:bg-white"
+            onClick={() => void onUpdate({ filters: { ...filters, rules: [...filters.rules, { id: crypto.randomUUID(), operator: "contains", property_id: "__title", value: "" }] } })}
+            type="button"
+          ><Plus className="size-3" /> Añadir filtro</button>
+        </section>
+
+        <section>
+          <div className="mb-2 font-semibold text-zinc-700">Ordenamientos</div>
+          <div className="space-y-2">
+            {view.sorts.map((sort) => (
+              <div className="grid grid-cols-[1fr_1fr_auto] gap-1" key={sort.id}>
+                <select
+                  className="h-8 min-w-0 rounded border bg-white px-1"
+                  onChange={(event) => void onUpdate({ sorts: view.sorts.map((item) => item.id === sort.id ? { ...item, property_id: event.target.value } : item) })}
+                  value={sort.property_id}
+                >
+                  <option value="__title">Nombre</option>
+                  {properties.map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}
+                </select>
+                <select
+                  className="h-8 rounded border bg-white px-1"
+                  onChange={(event) => void onUpdate({ sorts: view.sorts.map((item) => item.id === sort.id ? { ...item, direction: event.target.value as "asc" | "desc" } : item) })}
+                  value={sort.direction}
+                >
+                  <option value="asc">Ascendente</option>
+                  <option value="desc">Descendente</option>
+                </select>
+                <button
+                  aria-label="Eliminar orden"
+                  className="grid size-8 place-items-center rounded hover:bg-red-50 hover:text-red-600"
+                  onClick={() => void onUpdate({ sorts: view.sorts.filter((item) => item.id !== sort.id) })}
+                  type="button"
+                ><X className="size-3.5" /></button>
+              </div>
+            ))}
+          </div>
+          <button
+            className="mt-2 flex items-center gap-1 rounded px-2 py-1 text-zinc-500 hover:bg-white"
+            onClick={() => void onUpdate({ sorts: [...view.sorts, { direction: "asc", id: crypto.randomUUID(), property_id: "__title" }] })}
+            type="button"
+          ><Plus className="size-3" /> Añadir orden</button>
+        </section>
+      </div>
+
+      <section className="border-t pt-3">
+        <div className="mb-2 flex items-center gap-2 font-semibold text-zinc-700"><Columns3 className="size-3.5" /> Propiedades visibles en esta vista</div>
+        <div className="flex flex-wrap gap-2">
+          {properties.map((property) => (
+            <label className="flex items-center gap-1.5 rounded-md border bg-white px-2 py-1.5 text-zinc-600" key={property.id}>
+              <input
+                checked={visible.has(property.id)}
+                onChange={(event) => {
+                  const next = new Set(visible);
+                  next.delete("__none");
+                  if (event.target.checked) next.add(property.id); else next.delete(property.id);
+                  void onUpdate({ visible_properties: next.size ? [...next] : ["__none"] });
+                }}
+                type="checkbox"
+              />
+              {property.name}
+            </label>
+          ))}
+        </div>
+      </section>
+      <div className="mt-3 flex justify-end border-t pt-3">
+        <button
+          className="flex items-center gap-1 rounded-md px-2 py-1.5 text-red-600 hover:bg-red-50"
+          onClick={() => {
+            if (window.confirm(`¿Eliminar la vista “${view.name}”?`)) void onDelete();
+          }}
+          type="button"
+        ><Trash2 className="size-3.5" /> Eliminar vista</button>
+      </div>
+    </div>
+  );
+}
+
+function FilterValueInput({
+  currentUser,
+  onChange,
+  operator,
+  pages,
+  property,
+  value,
+}: {
+  currentUser: { id: string; label: string };
+  onChange: (value: unknown) => void;
+  operator: DatabaseFilterOperator;
+  pages: WorkspacePage[];
+  property: DatabaseProperty | undefined;
+  value: unknown;
+}) {
+  if (["is_empty", "is_not_empty", "checked", "unchecked"].includes(operator)) {
+    return <span className="h-8 rounded border border-dashed px-2 py-1.5 text-zinc-400">Sin valor</span>;
+  }
+  if (property && ["select", "status", "multi_select"].includes(property.type)) {
+    return (
+      <select className="h-8 min-w-0 rounded border bg-white px-1" onChange={(event) => onChange(event.target.value)} value={typeof value === "string" ? value : ""}>
+        <option value="">Elegir…</option>
+        {(property.config.options ?? []).map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+      </select>
+    );
+  }
+  if (property?.type === "person") {
+    return (
+      <select className="h-8 min-w-0 rounded border bg-white px-1" onChange={(event) => onChange(event.target.value)} value={typeof value === "string" ? value : ""}>
+        <option value="">Elegir…</option>
+        <option value={currentUser.id}>{currentUser.label}</option>
+      </select>
+    );
+  }
+  if (property?.type === "relation") {
+    return (
+      <select className="h-8 min-w-0 rounded border bg-white px-1" onChange={(event) => onChange(event.target.value)} value={typeof value === "string" ? value : ""}>
+        <option value="">Elegir…</option>
+        {pages.filter((page) => !page.is_archived).map((page) => <option key={page.id} value={page.id}>{page.title}</option>)}
+      </select>
+    );
+  }
+  return (
+    <input
+      className="h-8 min-w-0 rounded border bg-white px-2"
+      onBlur={(event) => onChange(property?.type === "number" ? Number(event.target.value) : event.target.value)}
+      defaultValue={typeof value === "string" || typeof value === "number" ? value : ""}
+      key={String(value)}
+      type={property && ["date", "created_time", "last_edited_time"].includes(property.type) ? "date" : property?.type === "number" ? "number" : "text"}
+    />
+  );
+}
+
+function ViewSetupMessage({ children }: { children: ReactNode }) {
+  return <div className="mt-3 rounded-xl border border-dashed bg-zinc-50 px-6 py-16 text-center text-sm text-zinc-500">{children}</div>;
+}
+
+function EmptyRows({ rows }: { rows: WorkspacePage[] }) {
+  if (rows.length) return null;
+  return <div className="px-4 py-12 text-center text-sm text-zinc-400">No hay filas que coincidan con esta vista.</div>;
+}
+
+function NewRowButton({ onCreateRow }: { onCreateRow: () => Promise<WorkspacePage | null> }) {
+  return (
+    <button className="flex h-10 w-full items-center gap-2 border-t px-4 text-sm text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800" onClick={() => void onCreateRow()} type="button">
+      <Plus className="size-4" /> Nueva fila
+    </button>
+  );
+}
+
+function ViewTypeIcon({ type }: { type: DatabaseViewType }) {
+  if (type === "board") return <SquareKanban className="size-3.5" />;
+  if (type === "list") return <List className="size-3.5" />;
+  if (type === "calendar") return <CalendarDays className="size-3.5" />;
+  if (type === "gallery") return <GalleryVerticalEnd className="size-3.5" />;
+  return <Table2 className="size-3.5" />;
 }
 
 function PropertyPanel({
@@ -995,6 +1962,227 @@ function propertyTypeIcon(type: DatabasePropertyType) {
     last_edited_time: "◷",
   };
   return icons[type];
+}
+
+function normalizeFilters(filters: DatabaseView["filters"] | null | undefined) {
+  return {
+    calendarMode: filters?.calendarMode === "week" ? "week" as const : "month" as const,
+    mode: filters?.mode === "or" ? "or" as const : "and" as const,
+    rules: Array.isArray(filters?.rules) ? filters.rules : [],
+  };
+}
+
+function applyView(
+  rows: WorkspacePage[],
+  properties: DatabaseProperty[],
+  view: DatabaseView | null,
+) {
+  if (!view) return rows;
+  const filters = normalizeFilters(view.filters);
+  const filtered = filters.rules.length
+    ? rows.filter((row) => {
+        const results = filters.rules.map((rule) => matchesFilter(row, rule, properties));
+        return filters.mode === "or" ? results.some(Boolean) : results.every(Boolean);
+      })
+    : [...rows];
+  if (!view.sorts.length) return filtered;
+  return filtered.sort((left, right) => {
+    for (const sort of view.sorts) {
+      const comparison = compareValues(
+        valueForProperty(left, sort.property_id, properties),
+        valueForProperty(right, sort.property_id, properties),
+      );
+      if (comparison !== 0) return sort.direction === "asc" ? comparison : -comparison;
+    }
+    return Number(left.position) - Number(right.position);
+  });
+}
+
+function matchesFilter(
+  row: WorkspacePage,
+  rule: DatabaseFilterRule,
+  properties: DatabaseProperty[],
+) {
+  const value = valueForProperty(row, rule.property_id, properties);
+  const empty = isEmptyValue(value);
+  if (rule.operator === "is_empty") return empty;
+  if (rule.operator === "is_not_empty") return !empty;
+  if (rule.operator === "checked") return value === true;
+  if (rule.operator === "unchecked") return value !== true;
+  if (empty) return rule.operator === "is_not" || rule.operator === "not_contains";
+
+  const expected = rule.value;
+  const comparable = Array.isArray(value) ? value.map(String) : String(value).toLocaleLowerCase("es");
+  const expectedText = String(expected ?? "").toLocaleLowerCase("es");
+  if (rule.operator === "contains") {
+    return Array.isArray(comparable)
+      ? comparable.includes(String(expected ?? ""))
+      : comparable.includes(expectedText);
+  }
+  if (rule.operator === "not_contains") {
+    return Array.isArray(comparable)
+      ? !comparable.includes(String(expected ?? ""))
+      : !comparable.includes(expectedText);
+  }
+  if (rule.operator === "is") return String(value) === String(expected ?? "");
+  if (rule.operator === "is_not") return String(value) !== String(expected ?? "");
+  if (rule.operator === "greater_than") return Number(value) > Number(expected);
+  if (rule.operator === "less_than") return Number(value) < Number(expected);
+  if (rule.operator === "before") return String(value) < String(expected ?? "");
+  if (rule.operator === "after") return String(value) > String(expected ?? "");
+  if (rule.operator === "on") return String(value) === String(expected ?? "");
+  return true;
+}
+
+function valueForProperty(
+  row: WorkspacePage,
+  propertyId: string,
+  properties: DatabaseProperty[],
+) {
+  if (propertyId === "__title") return row.title;
+  const property = properties.find((item) => item.id === propertyId);
+  if (property?.type === "created_time") return row.created_at.slice(0, 10);
+  if (property?.type === "last_edited_time") return row.updated_at.slice(0, 10);
+  if (property?.type === "date") return dateStart(row.properties[propertyId]);
+  return row.properties[propertyId];
+}
+
+function compareValues(left: unknown, right: unknown) {
+  if (isEmptyValue(left) && isEmptyValue(right)) return 0;
+  if (isEmptyValue(left)) return 1;
+  if (isEmptyValue(right)) return -1;
+  if (typeof left === "number" && typeof right === "number") return left - right;
+  if (typeof left === "boolean" && typeof right === "boolean") return Number(left) - Number(right);
+  return String(left).localeCompare(String(right), "es", { numeric: true, sensitivity: "base" });
+}
+
+function isEmptyValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return true;
+  if (Array.isArray(value)) return value.length === 0;
+  if (isRecord(value)) return !value.start && !value.end;
+  return false;
+}
+
+function operatorsForType(type: DatabasePropertyType) {
+  const empty = [
+    { label: "Está vacío", value: "is_empty" as const },
+    { label: "No está vacío", value: "is_not_empty" as const },
+  ];
+  if (type === "checkbox") {
+    return [
+      { label: "Marcada", value: "checked" as const },
+      { label: "Sin marcar", value: "unchecked" as const },
+    ];
+  }
+  if (type === "number") {
+    return [
+      { label: "Es", value: "is" as const },
+      { label: "No es", value: "is_not" as const },
+      { label: "Mayor que", value: "greater_than" as const },
+      { label: "Menor que", value: "less_than" as const },
+      ...empty,
+    ];
+  }
+  if (["date", "created_time", "last_edited_time"].includes(type)) {
+    return [
+      { label: "Es el día", value: "on" as const },
+      { label: "Antes de", value: "before" as const },
+      { label: "Después de", value: "after" as const },
+      ...empty,
+    ];
+  }
+  if (["select", "status", "person", "relation"].includes(type)) {
+    return [
+      { label: "Es", value: "is" as const },
+      { label: "No es", value: "is_not" as const },
+      ...empty,
+    ];
+  }
+  return [
+    { label: "Contiene", value: "contains" as const },
+    { label: "No contiene", value: "not_contains" as const },
+    { label: "Es", value: "is" as const },
+    { label: "No es", value: "is_not" as const },
+    ...empty,
+  ];
+}
+
+function groupRows(
+  rows: WorkspacePage[],
+  groupBy: string | null,
+  properties: DatabaseProperty[],
+  currentUser: { id: string; label: string },
+  pages: WorkspacePage[],
+) {
+  const property = properties.find((item) => item.id === groupBy);
+  if (!property) return [{ key: "all", label: null, rows }];
+  const groups = new Map<string, WorkspacePage[]>();
+  for (const row of rows) {
+    const raw = valueForProperty(row, property.id, properties);
+    const key = Array.isArray(raw) ? String(raw[0] ?? "") : String(raw ?? "");
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+  return [...groups.entries()].map(([key, groupedRows]) => ({
+    key: key || "empty",
+    label: key
+      ? propertyDisplayValue(groupedRows[0], property, currentUser, pages)
+      : "Sin valor",
+    rows: groupedRows,
+  }));
+}
+
+function boardGroups(
+  property: DatabaseProperty | null,
+  currentUser: { id: string; label: string },
+) {
+  const groups = [{ key: "empty", label: "Sin asignar", value: "" }];
+  if (!property) return groups;
+  if (property.type === "person") {
+    groups.push({ key: currentUser.id, label: currentUser.label, value: currentUser.id });
+    return groups;
+  }
+  for (const option of property.config.options ?? []) {
+    groups.push({ key: option.id, label: option.label, value: option.id });
+  }
+  return groups;
+}
+
+function propertyDisplayValue(
+  row: WorkspacePage,
+  property: DatabaseProperty,
+  currentUser: { id: string; label: string },
+  pages: WorkspacePage[],
+) {
+  if (property.type === "created_time") return formatDateTime(row.created_at);
+  if (property.type === "last_edited_time") return formatDateTime(row.updated_at);
+  const value = row.properties[property.id];
+  if (isEmptyValue(value)) return "—";
+  if (property.type === "checkbox") return value ? "Sí" : "No";
+  if (property.type === "date") {
+    const start = dateStart(value);
+    if (!start) return "—";
+    const end = isRecord(value) && typeof value.end === "string" ? value.end : null;
+    return end ? `${start} – ${end}` : start;
+  }
+  if (property.type === "person") return value === currentUser.id ? currentUser.label : "Sin asignar";
+  if (property.type === "relation") {
+    const related = pages.find((page) => page.id === value);
+    return related ? related.title : "—";
+  }
+  if (["select", "status"].includes(property.type)) {
+    return property.config.options?.find((option) => option.id === value)?.label ?? "—";
+  }
+  if (property.type === "multi_select" && Array.isArray(value)) {
+    return value
+      .map((id) => property.config.options?.find((option) => option.id === id)?.label)
+      .filter(Boolean)
+      .join(", ") || "—";
+  }
+  return String(value);
+}
+
+function dateStart(value: unknown) {
+  return isRecord(value) && typeof value.start === "string" ? value.start : null;
 }
 
 function formatDateTime(value: string) {

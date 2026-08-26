@@ -218,6 +218,7 @@ export function WorkspaceShell({
               onArchiveRows={archiveRows}
               onCreateRow={() => createDatabaseRow(selectedPage.id)}
               onOpenRow={selectPage}
+              onResolveFileUrl={resolveFileUrl}
               onUpdatePage={updatePage}
               pages={pages}
               rows={databaseRows}

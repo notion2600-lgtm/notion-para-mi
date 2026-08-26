@@ -39,6 +39,59 @@ export type DatabaseProperty = {
   position: number;
 };
 
+export type DatabaseViewType =
+  | "table"
+  | "board"
+  | "list"
+  | "calendar"
+  | "gallery";
+
+export type DatabaseFilterOperator =
+  | "is"
+  | "is_not"
+  | "contains"
+  | "not_contains"
+  | "is_empty"
+  | "is_not_empty"
+  | "greater_than"
+  | "less_than"
+  | "before"
+  | "after"
+  | "on"
+  | "checked"
+  | "unchecked";
+
+export type DatabaseFilterRule = {
+  id: string;
+  property_id: string;
+  operator: DatabaseFilterOperator;
+  value: unknown;
+};
+
+export type DatabaseViewFilters = {
+  calendarMode?: "month" | "week";
+  mode: "and" | "or";
+  rules: DatabaseFilterRule[];
+};
+
+export type DatabaseSort = {
+  id: string;
+  property_id: string;
+  direction: "asc" | "desc";
+};
+
+export type DatabaseView = {
+  id: string;
+  page_id: string;
+  name: string;
+  type: DatabaseViewType;
+  filters: DatabaseViewFilters;
+  sorts: DatabaseSort[];
+  group_by: string | null;
+  visible_properties: string[];
+  position: number;
+};
+
 export type WorkspacePage = {
   id: string;
   workspace_id: string;

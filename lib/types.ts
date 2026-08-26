@@ -172,3 +172,10 @@ export type PageTemplate = {
   is_builtin: boolean;
   created_at: string;
 };
+
+export type PageShare = {
+  page_id: string;
+  is_public: boolean;
+  public_slug: string | null;
+  created_at: string;
+};

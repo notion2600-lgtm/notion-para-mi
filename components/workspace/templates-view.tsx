@@ -17,7 +17,7 @@ export function TemplatesView({
   templates: PageTemplate[];
 }) {
   return (
-    <div className="mx-auto w-full max-w-[1000px] px-12 py-20">
+    <div className="mx-auto w-full max-w-[1000px] px-5 py-12 sm:px-12 sm:py-20">
       <div className="flex items-center gap-3">
         <span className="grid size-11 place-items-center rounded-xl bg-indigo-50 text-indigo-600">
           <LayoutTemplate className="size-5" />

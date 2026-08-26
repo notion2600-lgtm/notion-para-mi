@@ -49,7 +49,8 @@ La opción más directa no requiere instalar el CLI:
 2. Pulsa **New query**.
 3. Ejecuta, en orden, los archivos de `supabase/migrations/` que todavía no
    hayas aplicado. Empieza por `20260825000000_initial_schema.sql` y después
-   ejecuta `20260826000000_phase5_templates.sql`.
+   ejecuta `20260826000000_phase5_templates.sql` y
+   `20260827000000_phase6_public_sharing.sql`.
 4. Pega cada archivo completo en una consulta nueva y pulsa **Run** una sola vez.
 5. En **Table Editor** confirma que aparecen `profiles`, `workspaces`,
    `workspace_members`, `pages`, `db_properties`, `db_views`, `comments`,
@@ -108,6 +109,17 @@ también puedes guardar cualquier página con todas sus subpáginas desde el men
 de acciones. Ese mismo menú permite duplicar el subárbol, exportarlo a Markdown
 o abrir la impresión del navegador para guardarlo como PDF. Las páginas que
 mencionan a la página actual aparecen al final en **Enlazada desde**.
+
+La interfaz respeta el tema claro, oscuro o del sistema y se adapta a móvil con
+la barra lateral en modo cajón. Los atajos principales son **Ctrl/Cmd+K** para
+buscar, **Ctrl/Cmd+P** para ir a una página, **Ctrl/Cmd+N** para crear una,
+**Ctrl/Cmd+\\** para mostrar u ocultar la barra lateral y **Ctrl/Cmd+Mayús+L**
+para alternar el tema. **Esc** cierra el panel activo.
+
+El botón **Compartir** de cada página crea o desactiva una dirección pública
+`/p/[slug]`. El enlace funciona sin iniciar sesión y muestra la página y su
+subárbol en modo de solo lectura. Las políticas RLS mantienen privado el resto
+del workspace y los archivos publicados se entregan mediante URL firmada.
 
 ## Verificaciones
 

@@ -179,7 +179,7 @@ export function PageCanvas({
         </div>
       )}
 
-      <article className={`mx-auto w-full max-w-[900px] px-12 ${coverUrl ? "pt-10" : "pt-20"}`}>
+      <article className={`mx-auto w-full max-w-[900px] px-5 sm:px-12 ${coverUrl ? "pt-8 sm:pt-10" : "pt-12 sm:pt-20"}`}>
         <div className="relative mb-4 w-fit">
           <button
             aria-expanded={iconOpen}
@@ -230,7 +230,7 @@ export function PageCanvas({
 
         <input
           aria-label="Título de la página"
-          className="w-full border-none bg-transparent text-5xl font-bold tracking-[-0.04em] text-zinc-900 outline-none placeholder:text-zinc-300"
+          className="w-full border-none bg-transparent text-3xl font-bold tracking-[-0.04em] text-zinc-900 outline-none placeholder:text-zinc-300 sm:text-5xl"
           onBlur={saveTitle}
           onChange={(event) => setTitle(event.target.value)}
           onKeyDown={(event) => {
@@ -276,8 +276,8 @@ export function TrashView({
   );
 
   return (
-    <div className="mx-auto w-full max-w-[900px] px-12 py-20">
-      <div className="flex items-center gap-3">
+    <div className="mx-auto w-full max-w-[900px] px-5 py-12 sm:px-12 sm:py-20">
+      <div className="flex flex-wrap items-center gap-3">
         <span className="grid size-11 place-items-center rounded-xl bg-zinc-100 text-zinc-600">
           <Trash2 className="size-5" />
         </span>
@@ -378,7 +378,7 @@ export function SettingsView({
   workspace: WorkspaceSummary;
 }) {
   return (
-    <div className="mx-auto w-full max-w-[900px] px-12 py-20">
+    <div className="mx-auto w-full max-w-[900px] px-5 py-12 sm:px-12 sm:py-20">
       <div className="flex items-center gap-3">
         <span className="grid size-11 place-items-center rounded-xl bg-indigo-50 text-indigo-600">
           <Settings2 className="size-5" />

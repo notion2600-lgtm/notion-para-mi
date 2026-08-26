@@ -14,6 +14,7 @@ import {
   type DefaultReactSuggestionItem,
 } from "@blocknote/react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTheme } from "next-themes";
 
 import {
   phaseTwoSlashItems,
@@ -42,6 +43,7 @@ export function BlockEditor({
   pages: WorkspacePage[];
   resolveFileUrl: (path: string) => Promise<string>;
 }) {
+  const { resolvedTheme } = useTheme();
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const revision = useRef(0);
@@ -212,7 +214,7 @@ export function BlockEditor({
         editor={editor}
         onChange={handleChange}
         slashMenu={false}
-        theme="light"
+        theme={resolvedTheme === "dark" ? "dark" : "light"}
       >
         <SuggestionMenuController
           getItems={async (query) =>

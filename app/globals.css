@@ -46,12 +46,80 @@ html {
   color-scheme: light;
 }
 
+html.dark {
+  color-scheme: dark;
+}
+
 body {
   min-height: 100vh;
   background: var(--background);
   color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
   text-rendering: optimizeLegibility;
+}
+
+.dark body,
+.dark .workspace-root {
+  background: #191919;
+  color: #e4e4e7;
+}
+
+.dark * {
+  border-color: #3f3f46;
+}
+
+.dark .bg-white {
+  background-color: #202020;
+}
+
+.dark .bg-zinc-50,
+.dark .bg-zinc-50\/80,
+.dark .bg-zinc-50\/50 {
+  background-color: #242424;
+}
+
+.dark .bg-zinc-100,
+.dark .bg-zinc-100\/80 {
+  background-color: #2b2b2b;
+}
+
+.dark .bg-zinc-200,
+.dark .bg-zinc-200\/80 {
+  background-color: #353535;
+}
+
+.dark .workspace-root aside {
+  background: #202020;
+}
+
+.dark .text-zinc-950,
+.dark .text-zinc-900,
+.dark .text-zinc-800 {
+  color: #f4f4f5;
+}
+
+.dark .text-zinc-700,
+.dark .text-zinc-600 {
+  color: #d4d4d8;
+}
+
+.dark .text-zinc-500 {
+  color: #a1a1aa;
+}
+
+.dark input,
+.dark select,
+.dark textarea {
+  color: #f4f4f5;
+}
+
+.dark select option {
+  background: #202020;
+}
+
+.dark button:hover,
+.dark a:hover {
+  --tw-bg-opacity: 1;
 }
 
 button,
@@ -90,6 +158,15 @@ textarea {
   --bn-colors-tooltip-background: #18181b;
   --bn-colors-tooltip-text: #ffffff;
   background: transparent;
+}
+
+.dark .workspace-blocknote {
+  --bn-colors-editor-background: transparent;
+  --bn-colors-editor-text: #e4e4e7;
+  --bn-colors-menu-background: #27272a;
+  --bn-colors-menu-text: #f4f4f5;
+  --bn-colors-tooltip-background: #f4f4f5;
+  --bn-colors-tooltip-text: #18181b;
 }
 
 .workspace-blocknote .bn-editor {

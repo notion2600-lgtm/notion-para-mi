@@ -9,12 +9,15 @@ import {
   LayoutTemplate,
   Menu,
   MoreHorizontal,
+  Moon,
   Plus,
   Printer,
+  Sun,
   Table2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useTheme } from "next-themes";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { DatabaseCanvas } from "@/components/database/database-canvas";
@@ -26,6 +29,7 @@ import {
 } from "@/components/workspace/page-canvas";
 import { WorkspaceSidebar } from "@/components/workspace/workspace-sidebar";
 import { SearchDialog } from "@/components/workspace/search-dialog";
+import { ShareButton } from "@/components/workspace/share-button";
 import { TemplatesView } from "@/components/workspace/templates-view";
 import { usePageTemplates } from "@/hooks/use-page-templates";
 import { usePages } from "@/hooks/use-pages";
@@ -49,6 +53,7 @@ export function WorkspaceShell({
   workspace: WorkspaceSummary;
 }) {
   const router = useRouter();
+  const { resolvedTheme, setTheme, theme } = useTheme();
   const {
     archivePage,
     archiveRows,
@@ -73,6 +78,7 @@ export function WorkspaceShell({
   } = usePageTemplates(workspace.id);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const {
     searchOpen,
     selectedPageId,
@@ -102,6 +108,19 @@ export function WorkspaceShell({
     [pages, selectedPage],
   );
 
+  const selectPage = useCallback((pageId: string) => {
+    setSearchOpen(false);
+    setSelectedPageId(pageId);
+    router.replace(`/workspace?page=${pageId}`, { scroll: false });
+    if (isMobile) setSidebarVisible(false);
+  }, [isMobile, router, setSearchOpen, setSelectedPageId, setSidebarVisible]);
+
+  const createAndSelect = useCallback(async (parentPageId: string | null) => {
+    const page = await createPage(parentPageId);
+    if (page) selectPage(page.id);
+    return page;
+  }, [createPage, selectPage]);
+
   useEffect(() => {
     const requested = initialSelectedPageId
       ? pages.find((page) => page.id === initialSelectedPageId && !page.is_archived)
@@ -117,27 +136,51 @@ export function WorkspaceShell({
   }, [initialSelectedPageId, pages, selectedPageId, setSelectedPageId]);
 
   useEffect(() => {
-    function openSearch(event: KeyboardEvent) {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === "k") {
+    function handleShortcuts(event: KeyboardEvent) {
+      const command = event.ctrlKey || event.metaKey;
+      const key = event.key.toLocaleLowerCase();
+      if (command && key === "k") {
         event.preventDefault();
         setSearchOpen(true);
       }
+      if (command && key === "p") {
+        event.preventDefault();
+        setSearchOpen(true);
+      }
+      if (command && key === "n") {
+        event.preventDefault();
+        void createAndSelect(null);
+      }
+      if (command && event.key === "\\") {
+        event.preventDefault();
+        setSidebarVisible(!useWorkspaceUi.getState().sidebarVisible);
+      }
+      if (command && event.shiftKey && key === "l") {
+        event.preventDefault();
+        setTheme(resolvedTheme === "dark" ? "light" : "dark");
+      }
+      if (event.key === "Escape") {
+        setSearchOpen(false);
+        setActionsOpen(false);
+        setNewMenuOpen(false);
+        if (isMobile) setSidebarVisible(false);
+      }
     }
-    window.addEventListener("keydown", openSearch);
-    return () => window.removeEventListener("keydown", openSearch);
-  }, [setSearchOpen]);
+    window.addEventListener("keydown", handleShortcuts);
+    return () => window.removeEventListener("keydown", handleShortcuts);
+  }, [createAndSelect, isMobile, resolvedTheme, setSearchOpen, setSidebarVisible, setTheme]);
 
-  function selectPage(pageId: string) {
-    setSearchOpen(false);
-    setSelectedPageId(pageId);
-    router.replace(`/workspace?page=${pageId}`, { scroll: false });
-  }
-
-  async function createAndSelect(parentPageId: string | null) {
-    const page = await createPage(parentPageId);
-    if (page) selectPage(page.id);
-    return page;
-  }
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 768px)");
+    function applyViewport() {
+      const mobile = media.matches;
+      setIsMobile(mobile);
+      setSidebarVisible(!mobile);
+    }
+    applyViewport();
+    media.addEventListener("change", applyViewport);
+    return () => media.removeEventListener("change", applyViewport);
+  }, [setSidebarVisible]);
 
   async function createDatabaseAndSelect() {
     const database = await createDatabase(null);
@@ -172,20 +215,31 @@ export function WorkspaceShell({
 
   return (
     <div className="workspace-root flex h-screen overflow-hidden bg-white text-zinc-900">
-      {sidebarVisible && (
-        <WorkspaceSidebar
-          email={email}
-          onArchive={archive}
-          onCreate={createAndSelect}
-          onDuplicate={duplicatePage}
-          onMove={(pageId, parentPageId, position) =>
-            updatePage(pageId, { parent_page_id: parentPageId, position })
-          }
-          onSelect={selectPage}
-          onUpdate={updatePage}
-          pages={pages}
-          workspace={workspace}
+      {isMobile && sidebarVisible && (
+        <button
+          aria-label="Cerrar navegación"
+          className="fixed inset-0 z-40 bg-black/35"
+          onClick={() => setSidebarVisible(false)}
+          type="button"
         />
+      )}
+      {sidebarVisible && (
+        <div className={isMobile ? "fixed inset-y-0 left-0 z-50" : "shrink-0"}>
+          <WorkspaceSidebar
+            email={email}
+            mobile={isMobile}
+            onArchive={archive}
+            onCreate={createAndSelect}
+            onDuplicate={duplicatePage}
+            onMove={(pageId, parentPageId, position) =>
+              updatePage(pageId, { parent_page_id: parentPageId, position })
+            }
+            onSelect={selectPage}
+            onUpdate={updatePage}
+            pages={pages}
+            workspace={workspace}
+          />
+        </div>
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -223,8 +277,20 @@ export function WorkspaceShell({
             )}
           </nav>
           <div className="ml-auto flex items-center gap-1">
+            <button
+              aria-label={`Tema actual: ${theme === "system" ? "automático" : theme}. Cambiar tema`}
+              className="grid size-8 place-items-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
+              onClick={() =>
+                setTheme(theme === "system" ? "light" : theme === "light" ? "dark" : "system")
+              }
+              title="Cambiar tema (Ctrl+Shift+L)"
+              type="button"
+            >
+              {resolvedTheme === "dark" ? <Moon className="size-4" /> : <Sun className="size-4" />}
+            </button>
             {view === "page" && selectedPage && (
               <>
+                <ShareButton pageId={selectedPage.id} title={selectedPage.title} />
                 <FavoriteButton
                   favorite={selectedPage.is_favorite}
                   onClick={() => updatePage(selectedPage.id, { is_favorite: !selectedPage.is_favorite })}
@@ -324,7 +390,7 @@ export function WorkspaceShell({
           </div>
         </header>
 
-        <main className="workspace-main min-h-0 flex-1 overflow-y-auto">
+        <main className="workspace-main min-h-0 flex-1 overflow-y-auto" id="main-content" tabIndex={-1}>
           {view === "trash" ? (
             <TrashView
               onDelete={deletePagePermanently}

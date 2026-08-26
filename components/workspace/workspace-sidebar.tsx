@@ -45,6 +45,7 @@ type ContextMenuState = { pageId: string; x: number; y: number } | null;
 
 export function WorkspaceSidebar({
   email,
+  mobile = false,
   onArchive,
   onCreate,
   onDuplicate,
@@ -55,6 +56,7 @@ export function WorkspaceSidebar({
   workspace,
 }: {
   email: string;
+  mobile?: boolean;
   onArchive: (pageId: string) => void;
   onCreate: (parentPageId: string | null) => Promise<WorkspacePage | null>;
   onDuplicate: (pageId: string) => Promise<WorkspacePage | null>;
@@ -147,7 +149,7 @@ export function WorkspaceSidebar({
   return (
     <aside
       className="print-hidden relative flex h-screen shrink-0 flex-col border-r bg-[#f7f7f5] text-zinc-700"
-      style={{ width: sidebarWidth }}
+      style={{ width: mobile ? "min(88vw, 320px)" : sidebarWidth }}
     >
       <div className="flex h-14 items-center gap-2 px-3">
         <span className="grid size-8 shrink-0 place-items-center rounded-md bg-white text-base shadow-sm">
@@ -277,12 +279,14 @@ export function WorkspaceSidebar({
         </form>
       </div>
 
-      <div
-        aria-label="Redimensionar sidebar"
-        className="absolute inset-y-0 right-0 w-1 cursor-col-resize hover:bg-indigo-400/50"
-        onPointerDown={beginResize}
-        role="separator"
-      />
+      {!mobile && (
+        <div
+          aria-label="Redimensionar sidebar"
+          className="absolute inset-y-0 right-0 w-1 cursor-col-resize hover:bg-indigo-400/50"
+          onPointerDown={beginResize}
+          role="separator"
+        />
+      )}
 
       {contextMenu && contextPage && (
         <div

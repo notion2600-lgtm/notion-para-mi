@@ -158,6 +158,17 @@ export function DatabaseCanvas({
       return new Set([...current].filter((id) => valid.has(id)));
     });
   }, [rows]);
+  useEffect(() => {
+    function closePanels(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setPeekRowId(null);
+      setPropertiesOpen(false);
+      setViewControlsOpen(false);
+      setViewMenuOpen(false);
+    }
+    window.addEventListener("keydown", closePanels);
+    return () => window.removeEventListener("keydown", closePanels);
+  }, []);
 
   function saveTitle() {
     const nextTitle = title.trim() || "Base de datos";
@@ -191,11 +202,11 @@ export function DatabaseCanvas({
   }
 
   return (
-    <section className="relative mx-auto w-full max-w-[1400px] px-10 pb-28 pt-16">
+    <section className="relative mx-auto w-full max-w-[1400px] px-4 pb-28 pt-10 sm:px-10 sm:pt-16">
       <div className="mb-2 text-5xl">{database.icon || "📊"}</div>
       <input
         aria-label="Título de la base de datos"
-        className="w-full border-none bg-transparent text-5xl font-bold tracking-[-0.04em] outline-none placeholder:text-zinc-300"
+        className="w-full border-none bg-transparent text-3xl font-bold tracking-[-0.04em] outline-none placeholder:text-zinc-300 sm:text-5xl"
         onBlur={saveTitle}
         onChange={(event) => setTitle(event.target.value)}
         onKeyDown={(event) => {

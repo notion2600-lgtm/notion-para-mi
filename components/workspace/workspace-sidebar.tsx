@@ -22,6 +22,7 @@ import {
   Search,
   Settings,
   Star,
+  Table2,
   Trash2,
 } from "lucide-react";
 import { PointerEvent as ReactPointerEvent, useEffect, useMemo, useState } from "react";
@@ -411,7 +412,14 @@ function SidebarPageButton({
       onClick={onClick}
       type="button"
     >
-      <span>{page.icon || <FileText className="size-4 text-zinc-400" />}</span>
+      <span>
+        {page.icon ||
+          (page.type === "database" ? (
+            <Table2 className="size-4 text-zinc-400" />
+          ) : (
+            <FileText className="size-4 text-zinc-400" />
+          ))}
+      </span>
       <span className="truncate">{page.title}</span>
       {page.is_favorite && <Star className="ml-auto size-3 fill-current text-amber-500" />}
     </button>

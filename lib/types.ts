@@ -1,5 +1,44 @@
 export type PageType = "doc" | "database";
 
+export type DatabasePropertyType =
+  | "text"
+  | "number"
+  | "select"
+  | "multi_select"
+  | "status"
+  | "date"
+  | "checkbox"
+  | "url"
+  | "email"
+  | "phone"
+  | "person"
+  | "relation"
+  | "created_time"
+  | "last_edited_time";
+
+export type DatabaseOption = {
+  id: string;
+  label: string;
+  color: string;
+};
+
+export type DatabasePropertyConfig = {
+  hidden?: boolean;
+  numberFormat?: "number" | "currency" | "percent";
+  options?: DatabaseOption[];
+  range?: boolean;
+  width?: number;
+};
+
+export type DatabaseProperty = {
+  id: string;
+  page_id: string;
+  name: string;
+  type: DatabasePropertyType;
+  config: DatabasePropertyConfig;
+  position: number;
+};
+
 export type WorkspacePage = {
   id: string;
   workspace_id: string;

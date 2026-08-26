@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 import { getDescendantIds, getNextPosition } from "@/lib/page-tree";
 import { createClient } from "@/lib/supabase/client";
-import type { WorkspacePage } from "@/lib/types";
+import type { PageType, WorkspacePage } from "@/lib/types";
 
 export function usePages({
   initialPages,
@@ -46,7 +46,10 @@ export function usePages({
     queryClient.setQueryData(queryKey, pages);
   }
 
-  async function createPage(parentPageId: string | null = null) {
+  async function createPage(
+    parentPageId: string | null = null,
+    type: PageType = "doc",
+  ) {
     const previous = currentPages();
     const now = new Date().toISOString();
     const page: WorkspacePage = {
@@ -54,9 +57,9 @@ export function usePages({
       workspace_id: workspaceId,
       parent_page_id: parentPageId,
       parent_database_id: null,
-      type: "doc",
-      title: "Sin título",
-      icon: null,
+      type,
+      title: type === "database" ? "Base de datos" : "Sin título",
+      icon: type === "database" ? "📊" : null,
       cover_url: null,
       content: null,
       plain_text: "",
@@ -78,6 +81,73 @@ export function usePages({
       return null;
     }
     return page;
+  }
+
+  async function createDatabaseRow(databaseId: string) {
+    const previous = currentPages();
+    const database = previous.find(
+      (page) => page.id === databaseId && page.type === "database",
+    );
+    if (!database) return null;
+    const rows = previous.filter(
+      (page) => !page.is_archived && page.parent_database_id === databaseId,
+    );
+    const now = new Date().toISOString();
+    const row: WorkspacePage = {
+      id: crypto.randomUUID(),
+      workspace_id: workspaceId,
+      parent_page_id: null,
+      parent_database_id: databaseId,
+      type: "doc",
+      title: "Sin título",
+      icon: null,
+      cover_url: null,
+      content: null,
+      plain_text: "",
+      properties: {},
+      position: rows.length
+        ? Math.max(...rows.map((page) => Number(page.position))) + 1000
+        : 1000,
+      is_favorite: false,
+      is_archived: false,
+      archived_at: null,
+      created_by: userId,
+      created_at: now,
+      updated_at: now,
+    };
+    setPages([...previous, row]);
+
+    const { error } = await supabase.from("pages").insert(row);
+    if (error) {
+      setPages(previous);
+      toast.error("No se pudo crear la fila", { description: error.message });
+      return null;
+    }
+    return row;
+  }
+
+  async function archiveRows(rowIds: string[]) {
+    if (!rowIds.length) return true;
+    const previous = currentPages();
+    const archivedAt = new Date().toISOString();
+    setPages(
+      previous.map((page) =>
+        rowIds.includes(page.id)
+          ? { ...page, is_archived: true, archived_at: archivedAt }
+          : page,
+      ),
+    );
+    const { error } = await supabase
+      .from("pages")
+      .update({ archived_at: archivedAt, is_archived: true })
+      .in("id", rowIds);
+    if (error) {
+      setPages(previous);
+      toast.error("No se pudieron archivar las filas", { description: error.message });
+      return false;
+    }
+    toast.success(`${rowIds.length} ${rowIds.length === 1 ? "fila archivada" : "filas archivadas"}`);
+    return true;
   }
 
   async function updatePage(
@@ -218,7 +288,11 @@ export function usePages({
   return {
     ...query,
     pages: query.data,
+    archiveRows,
     createPage,
+    createDatabase: (parentPageId: string | null = null) =>
+      createPage(parentPageId, "database"),
+    createDatabaseRow,
     duplicatePage,
     restorePage: (pageId: string) => setArchived(pageId, false),
     archivePage: (pageId: string) => setArchived(pageId, true),

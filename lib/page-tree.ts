@@ -56,9 +56,8 @@ export function getPagePath(pages: WorkspacePage[], pageId: string) {
   while (current && !visited.has(current.id)) {
     visited.add(current.id);
     path.unshift(current);
-    current = current.parent_page_id
-      ? byId.get(current.parent_page_id)
-      : undefined;
+    const parentId = current.parent_page_id ?? current.parent_database_id;
+    current = parentId ? byId.get(parentId) : undefined;
   }
 
   return path;
@@ -73,7 +72,10 @@ export function getDescendantIds(pages: WorkspacePage[], pageId: string) {
     if (!parentId || descendants.has(parentId)) continue;
     descendants.add(parentId);
     pages
-      .filter((page) => page.parent_page_id === parentId)
+      .filter(
+        (page) =>
+          page.parent_page_id === parentId || page.parent_database_id === parentId,
+      )
       .forEach((page) => queue.push(page.id));
   }
 

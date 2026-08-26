@@ -9,6 +9,7 @@ import {
   GripVertical,
   MoreHorizontal,
   Plus,
+  Table2,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -83,7 +84,12 @@ export function PageRow({
         type="button"
       >
         <span className="shrink-0 text-[15px]">
-          {page.icon || <FileText className="size-4 text-zinc-400" />}
+          {page.icon ||
+            (page.type === "database" ? (
+              <Table2 className="size-4 text-zinc-400" />
+            ) : (
+              <FileText className="size-4 text-zinc-400" />
+            ))}
         </span>
         <span className="truncate">{page.title || "Sin título"}</span>
       </button>

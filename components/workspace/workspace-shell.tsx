@@ -1,10 +1,11 @@
 "use client";
 
-import { ChevronRight, Menu, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, Menu, Plus, Table2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { DatabaseCanvas } from "@/components/database/database-canvas";
 import {
   FavoriteButton,
   PageCanvas,
@@ -33,6 +34,9 @@ export function WorkspaceShell({
   const router = useRouter();
   const {
     archivePage,
+    archiveRows,
+    createDatabase,
+    createDatabaseRow,
     createPage,
     duplicatePage,
     pages,
@@ -41,6 +45,7 @@ export function WorkspaceShell({
     uploadPageFile,
     updatePage,
   } = usePages({ initialPages, userId, workspaceId: workspace.id });
+  const [newMenuOpen, setNewMenuOpen] = useState(false);
   const {
     selectedPageId,
     setSelectedPageId,
@@ -53,6 +58,16 @@ export function WorkspaceShell({
     [pages, selectedPageId],
   );
   const breadcrumbs = selectedPage ? getPagePath(pages, selectedPage.id) : [];
+  const databaseRows = useMemo(
+    () =>
+      selectedPage?.type === "database"
+        ? pages.filter(
+            (page) =>
+              page.parent_database_id === selectedPage.id && !page.is_archived,
+          )
+        : [],
+    [pages, selectedPage],
+  );
 
   useEffect(() => {
     const requested = initialSelectedPageId
@@ -77,6 +92,12 @@ export function WorkspaceShell({
     const page = await createPage(parentPageId);
     if (page) selectPage(page.id);
     return page;
+  }
+
+  async function createDatabaseAndSelect() {
+    const database = await createDatabase(null);
+    if (database) selectPage(database.id);
+    setNewMenuOpen(false);
   }
 
   async function archive(pageId: string) {
@@ -149,10 +170,39 @@ export function WorkspaceShell({
                 onClick={() => updatePage(selectedPage.id, { is_favorite: !selectedPage.is_favorite })}
               />
             )}
-            <Button onClick={() => createAndSelect(null)} size="sm" variant="ghost">
-              <Plus className="size-4" />
-              Nueva
-            </Button>
+            <div className="relative">
+              <Button
+                aria-expanded={newMenuOpen}
+                onClick={() => setNewMenuOpen((open) => !open)}
+                size="sm"
+                variant="ghost"
+              >
+                <Plus className="size-4" />
+                Nueva
+                <ChevronDown className="size-3" />
+              </Button>
+              {newMenuOpen && (
+                <div className="absolute right-0 top-9 z-40 w-48 rounded-lg border bg-white p-1 text-sm shadow-xl">
+                  <button
+                    className="flex h-9 w-full items-center gap-2 rounded-md px-2 hover:bg-zinc-100"
+                    onClick={() => {
+                      void createAndSelect(null);
+                      setNewMenuOpen(false);
+                    }}
+                    type="button"
+                  >
+                    <FileText className="size-4" /> Página
+                  </button>
+                  <button
+                    className="flex h-9 w-full items-center gap-2 rounded-md px-2 hover:bg-zinc-100"
+                    onClick={() => void createDatabaseAndSelect()}
+                    type="button"
+                  >
+                    <Table2 className="size-4" /> Base de datos
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
@@ -161,6 +211,17 @@ export function WorkspaceShell({
             <TrashView onRestore={restorePage} pages={pages} />
           ) : view === "settings" ? (
             <SettingsView email={email} workspace={workspace} />
+          ) : selectedPage?.type === "database" ? (
+            <DatabaseCanvas
+              currentUser={{ id: userId, label: email }}
+              database={selectedPage}
+              onArchiveRows={archiveRows}
+              onCreateRow={() => createDatabaseRow(selectedPage.id)}
+              onOpenRow={selectPage}
+              onUpdatePage={updatePage}
+              pages={pages}
+              rows={databaseRows}
+            />
           ) : (
             <PageCanvas
               onCreate={() => createAndSelect(null)}

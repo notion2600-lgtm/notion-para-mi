@@ -1,8 +1,8 @@
 # Workspace
 
 Aplicación web tipo Notion construida con Next.js 15, TypeScript, Tailwind CSS,
-shadcn/ui y Supabase. La Fase 0 incluye autenticación, esquema completo de base
-de datos, políticas RLS y creación automática del primer workspace.
+shadcn/ui y Supabase. Incluye autenticación, esquema de base de datos con RLS,
+creación automática del primer workspace y navegación de páginas persistentes.
 
 ## Requisitos
 
@@ -18,10 +18,8 @@ de datos, políticas RLS y creación automática del primer workspace.
 4. Espera a que el proyecto termine de prepararse.
 5. Abre **Project Settings → API**.
 6. Copia **Project URL**: será `NEXT_PUBLIC_SUPABASE_URL`.
-7. Copia la clave **anon public**: será `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-8. En la sección de claves legacy, copia **service_role**: será
-   `SUPABASE_SERVICE_ROLE_KEY`. Esta clave es secreta y nunca debe aparecer en
-   código del navegador ni en Git.
+7. Copia la **Publishable key**: será `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+8. No necesitas una clave secreta ni `service_role` para ejecutar la aplicación.
 
 ## 2. Crear el archivo de variables local
 
@@ -35,8 +33,7 @@ Abre `.env.local` y reemplaza únicamente los valores de ejemplo:
 
 ```dotenv
 NEXT_PUBLIC_SUPABASE_URL=https://TU-PROYECTO.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=TU_CLAVE_ANON
-SUPABASE_SERVICE_ROLE_KEY=TU_CLAVE_SERVICE_ROLE
+NEXT_PUBLIC_SUPABASE_ANON_KEY=TU_CLAVE_PUBLICABLE
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
@@ -82,7 +79,9 @@ npm run dev
 Abre [http://localhost:3000](http://localhost:3000), crea una cuenta y confirma
 el enlace recibido. Al entrar en `/workspace`, la pantalla muestra el nombre del
 workspace y el rol leídos desde Supabase. El trigger de alta crea el perfil, el
-workspace inicial y la membresía `owner` automáticamente.
+workspace inicial y la membresía `owner` automáticamente. Desde el panel puedes
+crear, anidar, reordenar, renombrar, duplicar, marcar como favorita, archivar y
+restaurar páginas; todos los cambios se guardan en Supabase.
 
 ## Verificaciones
 

@@ -1,14 +1,19 @@
-import { CheckCircle2, Database, Layers3 } from "lucide-react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
-import { SignOutButton } from "@/components/auth/sign-out-button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { QueryProvider } from "@/components/providers/query-provider";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { WorkspaceShell } from "@/components/workspace/workspace-shell";
 import { getServerSupabase } from "@/lib/supabase/server";
+import type { WorkspacePage, WorkspaceSummary } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Workspace" };
 
-export default async function WorkspacePage() {
+export default async function WorkspacePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const supabase = await getServerSupabase();
 
   if (!supabase) {
@@ -29,76 +34,69 @@ export default async function WorkspacePage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
   if (!user) redirect("/login");
 
-  const { data: membership, error } = await supabase
+  const { data: membership, error: membershipError } = await supabase
     .from("workspace_members")
     .select("role, workspaces(id, name, icon)")
     .eq("user_id", user.id)
     .limit(1)
     .maybeSingle();
-
-  const workspace = Array.isArray(membership?.workspaces)
+  const workspaceData = Array.isArray(membership?.workspaces)
     ? membership.workspaces[0]
     : membership?.workspaces;
 
-  return (
-    <main className="min-h-screen bg-zinc-50">
-      <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            <span className="grid size-9 place-items-center rounded-lg bg-indigo-600 text-white">
-              <Layers3 aria-hidden="true" className="size-4" />
-            </span>
-            <div>
-              <p className="font-semibold">{workspace?.name ?? "Workspace"}</p>
-              <p className="text-xs text-zinc-500">{user.email}</p>
-            </div>
-          </div>
-          <SignOutButton />
-        </div>
-      </header>
+  if (!membership || !workspaceData || membershipError) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-zinc-50 px-5">
+        <Card className="max-w-lg border-red-200">
+          <CardHeader>
+            <CardTitle>No encontramos tu workspace</CardTitle>
+            <CardDescription>
+              {membershipError?.message ?? "La membresía inicial no está disponible."}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </main>
+    );
+  }
 
-      <section className="mx-auto max-w-5xl px-6 py-16">
-        {workspace ? (
-          <>
-            <div className="mb-8 flex items-start gap-4">
-              <span className="text-4xl" role="img" aria-label="Workspace">
-                {workspace.icon || "✨"}
-              </span>
-              <div>
-                <h1 className="text-3xl font-semibold tracking-tight">{workspace.name}</h1>
-                <p className="mt-2 text-zinc-500">Tu espacio privado está listo.</p>
-              </div>
-            </div>
-            <Card className="max-w-2xl">
-              <CardHeader>
-                <div className="mb-2 grid size-10 place-items-center rounded-lg bg-emerald-50 text-emerald-700">
-                  <CheckCircle2 aria-hidden="true" className="size-5" />
-                </div>
-                <CardTitle>Fase 0 conectada</CardTitle>
-                <CardDescription>
-                  Tu sesión, perfil y membresía se cargaron desde la base de datos real.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex items-center gap-2 text-sm text-zinc-600">
-                <Database aria-hidden="true" className="size-4" />
-                Rol: {membership?.role}
-              </CardContent>
-            </Card>
-          </>
-        ) : (
-          <Card className="max-w-lg border-red-200">
-            <CardHeader>
-              <CardTitle>No encontramos el workspace inicial</CardTitle>
-              <CardDescription>
-                {error?.message ?? "Aplica la migración y vuelve a registrar el usuario."}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        )}
-      </section>
-    </main>
+  const { data: pages, error: pagesError } = await supabase
+    .from("pages")
+    .select("*")
+    .eq("workspace_id", workspaceData.id)
+    .order("position", { ascending: true });
+
+  if (pagesError) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-zinc-50 px-5">
+        <Card className="max-w-lg border-red-200">
+          <CardHeader>
+            <CardTitle>No pudimos cargar las páginas</CardTitle>
+            <CardDescription>{pagesError.message}</CardDescription>
+          </CardHeader>
+        </Card>
+      </main>
+    );
+  }
+
+  const requested = await searchParams;
+  const workspace: WorkspaceSummary = {
+    id: workspaceData.id,
+    name: workspaceData.name,
+    icon: workspaceData.icon,
+    role: membership.role as WorkspaceSummary["role"],
+  };
+
+  return (
+    <QueryProvider>
+      <WorkspaceShell
+        email={user.email ?? "Cuenta"}
+        initialPages={(pages ?? []) as WorkspacePage[]}
+        initialSelectedPageId={requested.page ?? null}
+        userId={user.id}
+        workspace={workspace}
+      />
+    </QueryProvider>
   );
 }

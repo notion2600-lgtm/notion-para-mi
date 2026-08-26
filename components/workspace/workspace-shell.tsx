@@ -36,7 +36,9 @@ export function WorkspaceShell({
     createPage,
     duplicatePage,
     pages,
+    resolveFileUrl,
     restorePage,
+    uploadPageFile,
     updatePage,
   } = usePages({ initialPages, userId, workspaceId: workspace.id });
   const {
@@ -162,8 +164,14 @@ export function WorkspaceShell({
           ) : (
             <PageCanvas
               onCreate={() => createAndSelect(null)}
+              onCreateSubpage={() =>
+                selectedPage ? createPage(selectedPage.id) : Promise.resolve(null)
+              }
               onUpdate={updatePage}
+              onUploadFile={uploadPageFile}
               page={selectedPage}
+              pages={pages}
+              resolveFileUrl={resolveFileUrl}
             />
           )}
         </main>

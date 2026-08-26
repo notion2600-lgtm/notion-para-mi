@@ -2,7 +2,8 @@
 
 Aplicación web tipo Notion construida con Next.js 15, TypeScript, Tailwind CSS,
 shadcn/ui y Supabase. Incluye autenticación, esquema de base de datos con RLS,
-creación automática del primer workspace y navegación de páginas persistentes.
+creación automática del primer workspace, navegación de páginas persistentes y
+un editor por bloques con archivos privados en Supabase Storage.
 
 ## Requisitos
 
@@ -81,7 +82,9 @@ el enlace recibido. Al entrar en `/workspace`, la pantalla muestra el nombre del
 workspace y el rol leídos desde Supabase. El trigger de alta crea el perfil, el
 workspace inicial y la membresía `owner` automáticamente. Desde el panel puedes
 crear, anidar, reordenar, renombrar, duplicar, marcar como favorita, archivar y
-restaurar páginas; todos los cambios se guardan en Supabase.
+restaurar páginas. Dentro de cada página puedes usar `/` para insertar bloques,
+`@` para mencionar otra página, subir imágenes, elegir un icono y añadir una
+portada. El contenido se guarda automáticamente en Supabase.
 
 ## Verificaciones
 
@@ -93,12 +96,13 @@ npm run build
 ## Estructura relevante
 
 - `app/`: rutas de la aplicación y callbacks de Auth
-- `components/`: formularios y componentes shadcn/ui
+- `components/editor/`: editor BlockNote, bloques personalizados y menciones
+- `components/`: formularios, workspace y componentes shadcn/ui
 - `lib/supabase/`: clientes de navegador, servidor y middleware
 - `supabase/migrations/`: esquema versionado, triggers y políticas RLS
 
 ## Despliegue futuro en Vercel
 
-El despliegue se hará en la Fase 7. Vercel necesitará las cuatro variables de
+El despliegue se hará en la Fase 7. Vercel necesitará las tres variables de
 `.env.example`. Después se añadirá el dominio final a **Site URL** y
 `https://TU-DOMINIO/auth/callback` a **Redirect URLs** en Supabase.

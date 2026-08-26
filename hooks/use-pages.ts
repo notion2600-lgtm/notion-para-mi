@@ -19,6 +19,10 @@ export function usePages({
 }) {
   const queryClient = useQueryClient();
   const supabase = useMemo(() => createClient(), []);
+  const signedUrlCache = useMemo(
+    () => new Map<string, { expiresAt: number; url: string }>(),
+    [],
+  );
   const queryKey = ["workspace-pages", workspaceId] as const;
   const query = useQuery({
     queryKey,
@@ -155,6 +159,62 @@ export function usePages({
     return true;
   }
 
+  async function uploadPageFile(pageId: string, file: File) {
+    const safeName = file.name
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9._-]/g, "-")
+      .replace(/-+/g, "-")
+      .toLowerCase();
+    const storagePath = `${workspaceId}/${pageId}/${crypto.randomUUID()}-${safeName || "archivo"}`;
+    const { error: uploadError } = await supabase.storage
+      .from("workspace-files")
+      .upload(storagePath, file, {
+        cacheControl: "3600",
+        contentType: file.type || "application/octet-stream",
+        upsert: false,
+      });
+
+    if (uploadError) {
+      toast.error("No se pudo subir el archivo", { description: uploadError.message });
+      throw uploadError;
+    }
+
+    const { error: metadataError } = await supabase.from("files").insert({
+      mime: file.type || "application/octet-stream",
+      name: file.name,
+      page_id: pageId,
+      size: file.size,
+      storage_path: storagePath,
+      workspace_id: workspaceId,
+    });
+    if (metadataError) {
+      await supabase.storage.from("workspace-files").remove([storagePath]);
+      toast.error("No se pudo registrar el archivo", {
+        description: metadataError.message,
+      });
+      throw metadataError;
+    }
+
+    return storagePath;
+  }
+
+  async function resolveFileUrl(path: string) {
+    if (/^(https?:|data:|blob:)/i.test(path)) return path;
+    const cached = signedUrlCache.get(path);
+    if (cached && cached.expiresAt > Date.now()) return cached.url;
+
+    const { data, error } = await supabase.storage
+      .from("workspace-files")
+      .createSignedUrl(path, 60 * 60);
+    if (error) throw error;
+    signedUrlCache.set(path, {
+      expiresAt: Date.now() + 55 * 60 * 1000,
+      url: data.signedUrl,
+    });
+    return data.signedUrl;
+  }
+
   return {
     ...query,
     pages: query.data,
@@ -162,6 +222,8 @@ export function usePages({
     duplicatePage,
     restorePage: (pageId: string) => setArchived(pageId, false),
     archivePage: (pageId: string) => setArchived(pageId, true),
+    resolveFileUrl,
+    uploadPageFile,
     updatePage,
   };
 }

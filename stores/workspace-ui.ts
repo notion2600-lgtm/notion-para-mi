@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-type WorkspaceView = "page" | "trash" | "settings";
+type WorkspaceView = "page" | "templates" | "trash" | "settings";
 
 type WorkspaceUiState = {
   expanded: Record<string, boolean>;

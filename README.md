@@ -47,9 +47,10 @@ La opción más directa no requiere instalar el CLI:
 
 1. En Supabase abre **SQL Editor**.
 2. Pulsa **New query**.
-3. Copia todo el contenido de
-   `supabase/migrations/20260825000000_initial_schema.sql`.
-4. Pégalo en el editor y pulsa **Run** una sola vez.
+3. Ejecuta, en orden, los archivos de `supabase/migrations/` que todavía no
+   hayas aplicado. Empieza por `20260825000000_initial_schema.sql` y después
+   ejecuta `20260826000000_phase5_templates.sql`.
+4. Pega cada archivo completo en una consulta nueva y pulsa **Run** una sola vez.
 5. En **Table Editor** confirma que aparecen `profiles`, `workspaces`,
    `workspace_members`, `pages`, `db_properties`, `db_views`, `comments`,
    `page_shares` y `files`.
@@ -98,6 +99,15 @@ filtros con reglas Y/O, añadir varios ordenamientos, agrupar registros y elegir
 qué propiedades se muestran. El tablero permite mover tarjetas entre estados y
 el calendario permite arrastrarlas a otra fecha; la configuración se persiste en
 `db_views`.
+
+La búsqueda global se abre con **Ctrl+K** o **Cmd+K** y consulta el índice de
+texto completo de Supabase. La papelera permite restaurar, eliminar una página
+definitivamente o vaciar todo. En **Plantillas** están las estructuras de
+Tareas, CRM, Calendario de contenido, Notas de reunión y Metas trimestrales;
+también puedes guardar cualquier página con todas sus subpáginas desde el menú
+de acciones. Ese mismo menú permite duplicar el subárbol, exportarlo a Markdown
+o abrir la impresión del navegador para guardarlo como PDF. Las páginas que
+mencionan a la página actual aparecen al final en **Enlazada desde**.
 
 ## Verificaciones
 

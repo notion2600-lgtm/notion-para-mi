@@ -4,6 +4,7 @@ import {
   FileImage,
   FileText,
   ImagePlus,
+  Link2,
   Plus,
   RotateCcw,
   Settings2,
@@ -45,16 +46,20 @@ const PAGE_EMOJIS = [
 ];
 
 export function PageCanvas({
+  backlinks,
   onCreate,
   onCreateSubpage,
+  onOpenPage,
   onUpdate,
   onUploadFile,
   page,
   pages,
   resolveFileUrl,
 }: {
+  backlinks: WorkspacePage[];
   onCreate: () => void;
   onCreateSubpage: () => Promise<WorkspacePage | null>;
+  onOpenPage: (pageId: string) => void;
   onUpdate: (pageId: string, changes: Partial<WorkspacePage>) => Promise<boolean>;
   onUploadFile: (pageId: string, file: File) => Promise<string>;
   page: WorkspacePage | null;
@@ -245,21 +250,29 @@ export function PageCanvas({
           pages={pages}
           resolveFileUrl={resolveFileUrl}
         />
+        <Backlinks backlinks={backlinks} onOpenPage={onOpenPage} />
       </article>
     </div>
   );
 }
 
 export function TrashView({
+  onDelete,
+  onEmpty,
   onRestore,
   pages,
 }: {
+  onDelete: (pageId: string) => Promise<boolean>;
+  onEmpty: () => Promise<boolean>;
   onRestore: (pageId: string) => void;
   pages: WorkspacePage[];
 }) {
   const archivedIds = new Set(pages.filter((page) => page.is_archived).map((page) => page.id));
   const roots = pages.filter(
-    (page) => page.is_archived && (!page.parent_page_id || !archivedIds.has(page.parent_page_id)),
+    (page) => {
+      const parentId = page.parent_page_id ?? page.parent_database_id;
+      return page.is_archived && (!parentId || !archivedIds.has(parentId));
+    },
   );
 
   return (
@@ -272,6 +285,20 @@ export function TrashView({
           <h1 className="text-3xl font-semibold tracking-tight">Papelera</h1>
           <p className="mt-1 text-sm text-zinc-500">Restaura páginas junto con todas sus subpáginas.</p>
         </div>
+        {roots.length > 0 && (
+          <Button
+            className="ml-auto"
+            onClick={() => {
+              if (window.confirm("¿Vaciar definitivamente toda la papelera? Esta acción no se puede deshacer.")) {
+                void onEmpty();
+              }
+            }}
+            size="sm"
+            variant="destructive"
+          >
+            <Trash2 className="size-3.5" /> Vaciar papelera
+          </Button>
+        )}
       </div>
 
       {roots.length ? (
@@ -289,6 +316,18 @@ export function TrashView({
                 <RotateCcw className="size-3.5" />
                 Restaurar
               </Button>
+              <button
+                className="grid size-8 place-items-center rounded-md text-zinc-400 hover:bg-red-50 hover:text-red-600"
+                onClick={() => {
+                  if (window.confirm(`¿Eliminar definitivamente “${page.title}” y sus subpáginas?`)) {
+                    void onDelete(page.id);
+                  }
+                }}
+                title="Eliminar definitivamente"
+                type="button"
+              >
+                <Trash2 className="size-4" />
+              </button>
             </div>
           ))}
         </div>
@@ -299,6 +338,35 @@ export function TrashView({
         </div>
       )}
     </div>
+  );
+}
+
+export function Backlinks({
+  backlinks,
+  onOpenPage,
+}: {
+  backlinks: WorkspacePage[];
+  onOpenPage: (pageId: string) => void;
+}) {
+  if (!backlinks.length) return null;
+  return (
+    <section className="mt-16 border-t pt-6">
+      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
+        <Link2 className="size-3.5" /> Enlazada desde
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {backlinks.map((page) => (
+          <button
+            className="flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm hover:bg-zinc-50"
+            key={page.id}
+            onClick={() => onOpenPage(page.id)}
+            type="button"
+          >
+            <span>{page.icon || "📄"}</span> {page.title}
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 

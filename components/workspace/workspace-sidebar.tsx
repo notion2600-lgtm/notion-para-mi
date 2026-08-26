@@ -15,6 +15,7 @@ import {
   Copy,
   FilePlus2,
   FileText,
+  LayoutTemplate,
   LogOut,
   MoreHorizontal,
   Pencil,
@@ -65,7 +66,6 @@ export function WorkspaceSidebar({
 }) {
   const {
     expanded,
-    searchOpen,
     selectedPageId,
     setExpanded,
     setSearchOpen,
@@ -75,7 +75,6 @@ export function WorkspaceSidebar({
   } = useWorkspaceUi();
   const [favoritesOpen, setFavoritesOpen] = useState(true);
   const [privateOpen, setPrivateOpen] = useState(true);
-  const [query, setQuery] = useState("");
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -85,13 +84,6 @@ export function WorkspaceSidebar({
     () => sortPages(pages.filter((page) => page.is_favorite && !page.is_archived)),
     [pages],
   );
-  const results = useMemo(() => {
-    const term = query.trim().toLocaleLowerCase("es");
-    if (!term) return [];
-    return pages.filter(
-      (page) => !page.is_archived && page.title.toLocaleLowerCase("es").includes(term),
-    );
-  }, [pages, query]);
   const archivedCount = pages.filter((page) => page.is_archived).length;
 
   useEffect(() => {
@@ -154,7 +146,7 @@ export function WorkspaceSidebar({
 
   return (
     <aside
-      className="relative flex h-screen shrink-0 flex-col border-r bg-[#f7f7f5] text-zinc-700"
+      className="print-hidden relative flex h-screen shrink-0 flex-col border-r bg-[#f7f7f5] text-zinc-700"
       style={{ width: sidebarWidth }}
     >
       <div className="flex h-14 items-center gap-2 px-3">
@@ -178,33 +170,12 @@ export function WorkspaceSidebar({
       <div className="px-2 pb-2">
         <button
           className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm hover:bg-zinc-200/80"
-          onClick={() => setSearchOpen(!searchOpen)}
+          onClick={() => setSearchOpen(true)}
           type="button"
         >
           <Search className="size-4 text-zinc-500" />
           Buscar
         </button>
-        {searchOpen && (
-          <div className="mt-1 px-1">
-            <input
-              autoFocus
-              className="h-8 w-full rounded-md border bg-white px-2 text-sm outline-none ring-indigo-500 focus:ring-2"
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Buscar por título…"
-              value={query}
-            />
-            {query && (
-              <div className="mt-1 max-h-36 overflow-y-auto">
-                {results.map((page) => (
-                  <SidebarPageButton key={page.id} onClick={() => onSelect(page.id)} page={page} />
-                ))}
-                {results.length === 0 && (
-                  <p className="px-2 py-3 text-xs text-zinc-500">Sin resultados</p>
-                )}
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-1 pb-3">
@@ -271,6 +242,14 @@ export function WorkspaceSidebar({
       </div>
 
       <div className="border-t px-2 py-2">
+        <button
+          className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm hover:bg-zinc-200/80"
+          onClick={() => setView("templates")}
+          type="button"
+        >
+          <LayoutTemplate className="size-4 text-zinc-500" />
+          Plantillas
+        </button>
         <button
           className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm hover:bg-zinc-200/80"
           onClick={() => setView("trash")}

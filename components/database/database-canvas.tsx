@@ -54,6 +54,7 @@ import {
 } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Backlinks } from "@/components/workspace/page-canvas";
 import {
   DATABASE_PROPERTY_TYPES,
   useDatabaseProperties,
@@ -77,21 +78,25 @@ import type {
 const OPTION_COLORS = ["gray", "blue", "green", "amber", "red", "violet", "pink"];
 
 export function DatabaseCanvas({
+  backlinks,
   currentUser,
   database,
   onArchiveRows,
   onCreateRow,
   onOpenRow,
+  onOpenPage,
   onResolveFileUrl,
   onUpdatePage,
   pages,
   rows,
 }: {
+  backlinks: WorkspacePage[];
   currentUser: { id: string; label: string };
   database: WorkspacePage;
   onArchiveRows: (rowIds: string[]) => Promise<boolean>;
   onCreateRow: () => Promise<WorkspacePage | null>;
   onOpenRow: (rowId: string) => void;
+  onOpenPage: (pageId: string) => void;
   onResolveFileUrl: (path: string) => Promise<string>;
   onUpdatePage: (pageId: string, changes: Partial<WorkspacePage>) => Promise<boolean>;
   pages: WorkspacePage[];
@@ -341,6 +346,8 @@ export function DatabaseCanvas({
       {(isLoading || viewsLoading) && (
         <p className="mt-3 text-xs text-zinc-400">Cargando base de datos…</p>
       )}
+
+      <Backlinks backlinks={backlinks} onOpenPage={onOpenPage} />
 
       {peekRow && (
         <RowPeek

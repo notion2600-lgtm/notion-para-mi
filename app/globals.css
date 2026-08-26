@@ -7,6 +7,30 @@
   --radius: 0.625rem;
 }
 
+@media print {
+  .print-hidden,
+  [role="dialog"] {
+    display: none !important;
+  }
+
+  html,
+  body,
+  .workspace-root,
+  .workspace-main {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  .workspace-root > div {
+    display: block !important;
+  }
+
+  @page {
+    margin: 18mm;
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

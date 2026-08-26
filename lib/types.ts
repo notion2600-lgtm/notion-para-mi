@@ -119,3 +119,56 @@ export type WorkspaceSummary = {
   icon: string | null;
   role: "owner" | "editor" | "viewer";
 };
+
+export type TemplatePageSnapshot = {
+  source_id: string;
+  parent_source_id: string | null;
+  parent_database_source_id: string | null;
+  type: PageType;
+  title: string;
+  icon: string | null;
+  cover_url: string | null;
+  content: unknown;
+  plain_text: string;
+  properties: Record<string, unknown>;
+  position: number;
+};
+
+export type TemplatePropertySnapshot = {
+  source_id: string;
+  page_source_id: string;
+  name: string;
+  type: DatabasePropertyType;
+  config: DatabasePropertyConfig;
+  position: number;
+};
+
+export type TemplateViewSnapshot = {
+  source_id: string;
+  page_source_id: string;
+  name: string;
+  type: DatabaseViewType;
+  filters: DatabaseViewFilters;
+  sorts: DatabaseSort[];
+  group_by_source_id: string | null;
+  visible_property_source_ids: string[];
+  position: number;
+};
+
+export type TemplateSnapshot = {
+  pages: TemplatePageSnapshot[];
+  properties: TemplatePropertySnapshot[];
+  views: TemplateViewSnapshot[];
+};
+
+export type PageTemplate = {
+  id: string;
+  workspace_id: string | null;
+  created_by: string | null;
+  name: string;
+  description: string;
+  icon: string;
+  snapshot: TemplateSnapshot;
+  is_builtin: boolean;
+  created_at: string;
+};

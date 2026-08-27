@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import type { PageTemplate } from "@/lib/types";
 
-export function usePageTemplates(workspaceId: string) {
+export function usePageTemplates(workspaceId: string, userId: string) {
   const supabase = useMemo(() => createClient(), []);
   const queryClient = useQueryClient();
   const queryKey = ["page-templates", workspaceId] as const;
@@ -42,9 +42,43 @@ export function usePageTemplates(workspaceId: string) {
     return true;
   }
 
+  async function importNotionTemplate(file: File) {
+    try {
+      const { parseNotionTemplate } = await import("@/lib/notion-import");
+      const imported = await parseNotionTemplate(file);
+      const template: PageTemplate = {
+        created_at: new Date().toISOString(),
+        created_by: userId,
+        description: imported.description,
+        icon: imported.icon,
+        id: crypto.randomUUID(),
+        is_builtin: false,
+        name: imported.name,
+        snapshot: imported.snapshot,
+        workspace_id: workspaceId,
+      };
+      const { error } = await supabase.from("page_templates").insert(template);
+      if (error) throw error;
+      await queryClient.invalidateQueries({ queryKey });
+      toast.success(`Plantilla “${template.name}” importada`);
+      if (imported.warnings.length) {
+        toast.warning("Parte del contenido necesita revisión", {
+          description: imported.warnings.join(" "),
+        });
+      }
+      return template;
+    } catch (error) {
+      toast.error("No se pudo importar la plantilla", {
+        description: error instanceof Error ? error.message : "Archivo no compatible.",
+      });
+      return null;
+    }
+  }
+
   return {
     ...query,
     deleteTemplate,
+    importNotionTemplate,
     templates: query.data ?? [],
   };
 }

@@ -73,9 +73,10 @@ export function WorkspaceShell({
   } = usePages({ initialPages, userId, workspaceId: workspace.id });
   const {
     deleteTemplate,
+    importNotionTemplate,
     isLoading: templatesLoading,
     templates,
-  } = usePageTemplates(workspace.id);
+  } = usePageTemplates(workspace.id, userId);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -402,6 +403,7 @@ export function WorkspaceShell({
             <TemplatesView
               isLoading={templatesLoading}
               onDelete={deleteTemplate}
+              onImport={async (file) => Boolean(await importNotionTemplate(file))}
               onUse={createFromTemplateAndSelect}
               templates={templates}
             />

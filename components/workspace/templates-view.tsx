@@ -1,6 +1,7 @@
 "use client";
 
-import { LayoutTemplate, Plus, Trash2 } from "lucide-react";
+import { FileArchive, LayoutTemplate, LoaderCircle, Plus, Trash2, Upload } from "lucide-react";
+import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import type { PageTemplate, WorkspacePage } from "@/lib/types";
@@ -8,14 +9,30 @@ import type { PageTemplate, WorkspacePage } from "@/lib/types";
 export function TemplatesView({
   isLoading,
   onDelete,
+  onImport,
   onUse,
   templates,
 }: {
   isLoading: boolean;
   onDelete: (templateId: string) => Promise<boolean>;
+  onImport: (file: File) => Promise<boolean>;
   onUse: (template: PageTemplate) => Promise<WorkspacePage | null>;
   templates: PageTemplate[];
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [isImporting, setIsImporting] = useState(false);
+
+  async function importFile(file: File | undefined) {
+    if (!file || isImporting) return;
+    setIsImporting(true);
+    try {
+      await onImport(file);
+    } finally {
+      setIsImporting(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
   return (
     <div className="mx-auto w-full max-w-[1000px] px-5 py-12 sm:px-12 sm:py-20">
       <div className="flex items-center gap-3">
@@ -29,6 +46,40 @@ export function TemplatesView({
           </p>
         </div>
       </div>
+
+      <section className="mt-8 flex flex-col gap-4 rounded-xl border border-dashed bg-zinc-50/80 p-5 sm:flex-row sm:items-center">
+        <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-white text-indigo-600 shadow-sm">
+          <FileArchive className="size-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold">Importar desde Notion</h2>
+          <p className="mt-1 text-xs leading-5 text-zinc-500" id="notion-import-help">
+            Selecciona una exportación ZIP con Markdown y CSV, o un archivo individual .md o .csv.
+            Se convertirá en una plantilla editable de este workspace.
+          </p>
+        </div>
+        <input
+          accept=".zip,.md,.markdown,.csv,application/zip,text/markdown,text/csv"
+          aria-describedby="notion-import-help"
+          className="sr-only"
+          onChange={(event) => void importFile(event.target.files?.[0])}
+          ref={inputRef}
+          type="file"
+        />
+        <Button
+          className="shrink-0"
+          disabled={isImporting}
+          onClick={() => inputRef.current?.click()}
+          variant="outline"
+        >
+          {isImporting ? (
+            <LoaderCircle className="size-4 animate-spin" />
+          ) : (
+            <Upload className="size-4" />
+          )}
+          {isImporting ? "Importando…" : "Elegir archivo"}
+        </Button>
+      </section>
 
       {isLoading ? (
         <div className="mt-10 h-40 animate-pulse rounded-xl bg-zinc-100" />

@@ -110,6 +110,14 @@ de acciones. Ese mismo menú permite duplicar el subárbol, exportarlo a Markdow
 o abrir la impresión del navegador para guardarlo como PDF. Las páginas que
 mencionan a la página actual aparecen al final en **Enlazada desde**.
 
+En **Plantillas → Importar desde Notion** puedes seleccionar una exportación
+`.zip` de Notion en formato Markdown y CSV, o un archivo `.md`/`.csv`
+individual. Las carpetas se convierten en páginas anidadas, Markdown en bloques
+y cada CSV en una base de datos editable. El importador admite hasta 20 MB,
+500 archivos compatibles, 500 filas por CSV y 50 columnas. Las imágenes y
+adjuntos locales se dejan como referencias de texto para que puedas revisarlos
+y volver a subirlos desde el editor.
+
 La interfaz respeta el tema claro, oscuro o del sistema y se adapta a móvil con
 la barra lateral en modo cajón. Los atajos principales son **Ctrl/Cmd+K** para
 buscar, **Ctrl/Cmd+P** para ir a una página, **Ctrl/Cmd+N** para crear una,

@@ -49,6 +49,7 @@ import { es } from "date-fns/locale";
 import {
   type ReactNode,
   type PointerEvent as ReactPointerEvent,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -346,6 +347,7 @@ export function DatabaseCanvas({
           database={database}
           onCreateProperty={createColumn}
           onCreateRow={onCreateRow}
+          onDeleteProperty={deleteProperty}
           onOpenRow={(rowId) => setPeekRowId(rowId)}
           onResolveFileUrl={onResolveFileUrl}
           onResizeColumn={(propertyId, width) =>
@@ -397,6 +399,7 @@ type ViewSurfaceProps = {
     type: DatabasePropertyType,
   ) => Promise<DatabaseProperty | null>;
   onCreateRow: () => Promise<WorkspacePage | null>;
+  onDeleteProperty: (propertyId: string) => Promise<boolean>;
   onOpenRow: (rowId: string) => void;
   onResolveFileUrl: (path: string) => Promise<string>;
   onResizeColumn: (propertyId: string, width: number) => void;
@@ -434,6 +437,7 @@ function TableView({
   database,
   onCreateProperty,
   onCreateRow,
+  onDeleteProperty,
   onOpenRow,
   onResizeColumn,
   onToggleRow,
@@ -476,8 +480,11 @@ function TableView({
                 type="checkbox"
               />
             </th>
-            <th className="relative border-b border-r px-3">
-              Nombre
+            <th className="relative border-b border-r p-0">
+              <TitleColumnHeader
+                database={database}
+                onUpdatePage={onUpdatePage}
+              />
               <ColumnResizeHandle
                 onCommit={(width) =>
                   void onUpdatePage(database.id, {
@@ -491,9 +498,12 @@ function TableView({
             {visibleProperties.map((property) => {
               const width = columnWidths[property.id] ?? property.config.width ?? 180;
               return (
-                <th className="relative border-b border-r px-3" key={property.id}>
-                  <span className="mr-2">{propertyTypeIcon(property.type)}</span>
-                  {property.name}
+                <th className="relative border-b border-r p-0" key={property.id}>
+                  <ColumnHeaderEditor
+                    onDelete={onDeleteProperty}
+                    onUpdate={onUpdateProperty}
+                    property={property}
+                  />
                   <ColumnResizeHandle
                     onCommit={(nextWidth) =>
                       void onUpdateProperty(property.id, {
@@ -570,6 +580,377 @@ function TableView({
       <EmptyRows rows={rows} />
       <NewRowButton onCreateRow={onCreateRow} />
     </div>
+  );
+}
+
+function TitleColumnHeader({
+  database,
+  onUpdatePage,
+}: {
+  database: WorkspacePage;
+  onUpdatePage: (pageId: string, changes: Partial<WorkspacePage>) => Promise<boolean>;
+}) {
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const storedName =
+    typeof database.properties._title_name === "string"
+      ? database.properties._title_name
+      : "Nombre";
+  const [isOpen, setIsOpen] = useState(false);
+  const [name, setName] = useState(storedName);
+  const nameRef = useRef(storedName);
+  const [position, setPosition] = useState({ left: 12, top: 12 });
+
+  useEffect(() => {
+    setName(storedName);
+    nameRef.current = storedName;
+  }, [storedName]);
+
+  const saveName = useCallback((value = nameRef.current) => {
+    const nextName = value.trim() || "Nombre";
+    setName(nextName);
+    nameRef.current = nextName;
+    if (nextName === storedName) return;
+    void onUpdatePage(database.id, {
+      properties: { ...database.properties, _title_name: nextName },
+    });
+  }, [database.id, database.properties, onUpdatePage, storedName]);
+
+  useEffect(() => {
+    if (!isOpen || !buttonRef.current) return;
+    const button = buttonRef.current as HTMLButtonElement;
+
+    function positionMenu() {
+      const rect = button.getBoundingClientRect();
+      const menuWidth = Math.min(310, window.innerWidth - 24);
+      setPosition({
+        left: Math.max(12, Math.min(rect.left, window.innerWidth - menuWidth - 12)),
+        top: rect.bottom + 6,
+      });
+    }
+
+    function close(event: MouseEvent) {
+      const target = event.target as Node;
+      if (!menuRef.current?.contains(target) && !button.contains(target)) {
+        saveName();
+        setIsOpen(false);
+      }
+    }
+
+    function closeOnKey(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      saveName();
+      setIsOpen(false);
+    }
+
+    positionMenu();
+    const focusTimer = window.setTimeout(() => inputRef.current?.focus(), 0);
+    window.addEventListener("mousedown", close);
+    window.addEventListener("keydown", closeOnKey);
+    window.addEventListener("resize", positionMenu);
+    window.addEventListener("scroll", positionMenu, true);
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("keydown", closeOnKey);
+      window.removeEventListener("resize", positionMenu);
+      window.removeEventListener("scroll", positionMenu, true);
+    };
+  }, [isOpen, saveName]);
+
+  return (
+    <>
+      <button
+        aria-expanded={isOpen}
+        aria-haspopup="dialog"
+        className="flex h-10 w-full items-center gap-2 px-3 text-left hover:bg-zinc-100"
+        onClick={() => setIsOpen((open) => !open)}
+        ref={buttonRef}
+        type="button"
+      >
+        <span className="text-zinc-400">Aa</span>
+        <span className="truncate">{storedName}</span>
+      </button>
+      {isOpen && (
+        <div
+          aria-label={`Editar columna ${storedName}`}
+          className="fixed z-[80] w-[min(310px,calc(100vw-24px))] rounded-xl border border-zinc-200 bg-white p-2 text-left font-normal text-zinc-900 shadow-[0_12px_32px_rgba(0,0,0,0.16)]"
+          ref={menuRef}
+          role="dialog"
+          style={{ left: position.left, top: position.top }}
+        >
+          <label className="flex h-10 items-center gap-2 rounded-lg bg-zinc-50 px-2 focus-within:ring-2 focus-within:ring-indigo-100">
+            <span className="w-6 text-center text-sm font-medium text-zinc-500">Aa</span>
+            <input
+              aria-label="Nombre de la columna principal"
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+              maxLength={80}
+              onBlur={() => saveName()}
+              onChange={(event) => {
+                setName(event.target.value);
+                nameRef.current = event.target.value;
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+              }}
+              ref={inputRef}
+              value={name}
+            />
+          </label>
+          <div className="mt-2 flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-zinc-600">
+            <span className="w-6 text-center text-zinc-400">Aa</span>
+            <div>
+              <p className="text-zinc-700">Título</p>
+              <p className="text-[11px] text-zinc-400">Propiedad principal de la página</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function ColumnHeaderEditor({
+  onDelete,
+  onUpdate,
+  property,
+}: {
+  onDelete: (propertyId: string) => Promise<boolean>;
+  onUpdate: (
+    propertyId: string,
+    changes: Partial<Pick<DatabaseProperty, "config" | "name" | "position" | "type">>,
+  ) => Promise<boolean>;
+  property: DatabaseProperty;
+}) {
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [name, setName] = useState(property.name);
+  const nameRef = useRef(property.name);
+  const [position, setPosition] = useState({ left: 12, top: 12 });
+  const configurableOptions =
+    property.type === "select" ||
+    property.type === "multi_select" ||
+    property.type === "status";
+
+  useEffect(() => {
+    setName(property.name);
+    nameRef.current = property.name;
+  }, [property.name]);
+
+  const saveName = useCallback((value = nameRef.current) => {
+    const nextName = value.trim() || "Propiedad";
+    setName(nextName);
+    nameRef.current = nextName;
+    if (nextName !== property.name) void onUpdate(property.id, { name: nextName });
+  }, [onUpdate, property.id, property.name]);
+
+  useEffect(() => {
+    if (!isOpen || !buttonRef.current) return;
+    const button = buttonRef.current as HTMLButtonElement;
+
+    function positionMenu() {
+      const rect = button.getBoundingClientRect();
+      const menuWidth = Math.min(330, window.innerWidth - 24);
+      const menuHeight = menuRef.current?.offsetHeight ?? 390;
+      const roomBelow = window.innerHeight - rect.bottom;
+      setPosition({
+        left: Math.max(12, Math.min(rect.left, window.innerWidth - menuWidth - 12)),
+        top:
+          roomBelow >= Math.min(menuHeight, 260)
+            ? rect.bottom + 6
+            : Math.max(12, rect.top - menuHeight - 6),
+      });
+    }
+
+    function close(event: MouseEvent) {
+      const target = event.target as Node;
+      if (!menuRef.current?.contains(target) && !button.contains(target)) {
+        saveName();
+        setIsOpen(false);
+      }
+    }
+
+    function closeOnKey(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      saveName();
+      setIsOpen(false);
+    }
+
+    positionMenu();
+    const focusTimer = window.setTimeout(() => inputRef.current?.focus(), 0);
+    window.addEventListener("mousedown", close);
+    window.addEventListener("keydown", closeOnKey);
+    window.addEventListener("resize", positionMenu);
+    window.addEventListener("scroll", positionMenu, true);
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("keydown", closeOnKey);
+      window.removeEventListener("resize", positionMenu);
+      window.removeEventListener("scroll", positionMenu, true);
+    };
+  }, [isOpen, saveName]);
+
+  return (
+    <>
+      <button
+        aria-expanded={isOpen}
+        aria-haspopup="dialog"
+        className="flex h-10 w-full items-center gap-2 px-3 text-left hover:bg-zinc-100"
+        onClick={() => setIsOpen((open) => !open)}
+        ref={buttonRef}
+        type="button"
+      >
+        <span className="shrink-0 text-zinc-400">{propertyTypeIcon(property.type)}</span>
+        <span className="truncate">{property.name}</span>
+      </button>
+      {isOpen && (
+        <div
+          aria-label={`Editar columna ${property.name}`}
+          className="fixed z-[80] flex w-[min(330px,calc(100vw-24px))] flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white text-left font-normal text-zinc-900 shadow-[0_12px_32px_rgba(0,0,0,0.16)]"
+          ref={menuRef}
+          role="dialog"
+          style={{
+            left: position.left,
+            maxHeight: `calc(100vh - ${position.top}px - 12px)`,
+            top: position.top,
+          }}
+        >
+          <div className="overflow-y-auto p-2">
+            <label className="flex h-10 items-center gap-2 rounded-lg bg-zinc-50 px-2 focus-within:ring-2 focus-within:ring-indigo-100">
+              <span className="w-6 shrink-0 text-center text-sm font-medium text-zinc-500">
+                {propertyTypeIcon(property.type)}
+              </span>
+              <input
+                aria-label="Nombre de la columna"
+                className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+                maxLength={80}
+                onBlur={() => saveName()}
+                onChange={(event) => {
+                  setName(event.target.value);
+                  nameRef.current = event.target.value;
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.currentTarget.blur();
+                }}
+                ref={inputRef}
+                value={name}
+              />
+            </label>
+
+            <label className="mt-2 block px-2 py-1 text-xs font-medium text-zinc-500">
+              Tipo de propiedad
+              <select
+                className="mt-1.5 h-9 w-full rounded-lg border border-zinc-200 bg-white px-2 text-sm font-normal text-zinc-800 outline-none focus:ring-2 focus:ring-indigo-100"
+                onChange={(event) => {
+                  const type = event.target.value as DatabasePropertyType;
+                  void onUpdate(property.id, {
+                    config: configForType(type, property.config),
+                    type,
+                  });
+                }}
+                value={property.type}
+              >
+                {DATABASE_PROPERTY_TYPES.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {propertyTypeIcon(type.value)} {type.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {property.type === "number" && (
+              <label className="mt-2 block px-2 py-1 text-xs font-medium text-zinc-500">
+                Formato
+                <select
+                  className="mt-1.5 h-9 w-full rounded-lg border border-zinc-200 bg-white px-2 text-sm font-normal text-zinc-800"
+                  onChange={(event) =>
+                    void onUpdate(property.id, {
+                      config: {
+                        ...property.config,
+                        numberFormat: event.target.value as "number" | "currency" | "percent",
+                      },
+                    })
+                  }
+                  value={property.config.numberFormat ?? "number"}
+                >
+                  <option value="number">Número</option>
+                  <option value="currency">Moneda</option>
+                  <option value="percent">Porcentaje</option>
+                </select>
+              </label>
+            )}
+
+            {property.type === "date" && (
+              <label className="mt-2 flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-zinc-700 hover:bg-zinc-50">
+                <input
+                  checked={Boolean(property.config.range)}
+                  onChange={(event) =>
+                    void onUpdate(property.id, {
+                      config: { ...property.config, range: event.target.checked },
+                    })
+                  }
+                  type="checkbox"
+                />
+                Permitir rango de fechas
+              </label>
+            )}
+
+            {configurableOptions && (
+              <label className="mt-2 block px-2 py-1 text-xs font-medium text-zinc-500">
+                Opciones separadas por comas
+                <input
+                  className="mt-1.5 h-9 w-full rounded-lg border border-zinc-200 bg-white px-2 text-sm font-normal text-zinc-800 outline-none focus:ring-2 focus:ring-indigo-100"
+                  defaultValue={(property.config.options ?? [])
+                    .map((option) => option.label)
+                    .join(", ")}
+                  key={JSON.stringify(property.config.options)}
+                  onBlur={(event) =>
+                    void onUpdate(property.id, {
+                      config: {
+                        ...property.config,
+                        options: optionsFromText(
+                          event.target.value,
+                          property.config.options ?? [],
+                        ),
+                      },
+                    })
+                  }
+                  placeholder="Nuevo, En curso, Listo"
+                />
+              </label>
+            )}
+          </div>
+
+          <div className="border-t border-zinc-100 p-1.5">
+            <button
+              className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm text-zinc-700 hover:bg-zinc-100"
+              onClick={() =>
+                void onUpdate(property.id, {
+                  config: { ...property.config, hidden: true },
+                })
+              }
+              type="button"
+            >
+              <EyeOff className="size-4 text-zinc-500" /> Ocultar columna
+            </button>
+            <button
+              className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm text-red-600 hover:bg-red-50"
+              onClick={async () => {
+                if (!window.confirm(`¿Eliminar la columna “${property.name}”?`)) return;
+                if (await onDelete(property.id)) setIsOpen(false);
+              }}
+              type="button"
+            >
+              <Trash2 className="size-4" /> Eliminar columna
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

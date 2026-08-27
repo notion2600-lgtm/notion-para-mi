@@ -137,8 +137,25 @@ npm run build
 - `lib/supabase/`: clientes de navegador, servidor y middleware
 - `supabase/migrations/`: esquema versionado, triggers y políticas RLS
 
-## Despliegue futuro en Vercel
+## Desplegar en Vercel
 
-El despliegue se hará en la Fase 7. Vercel necesitará las tres variables de
-`.env.example`. Después se añadirá el dominio final a **Site URL** y
-`https://TU-DOMINIO/auth/callback` a **Redirect URLs** en Supabase.
+1. En Vercel pulsa **Add New → Project** e importa el repositorio de GitHub.
+2. Mantén **Next.js** como framework y la raíz del proyecto sin cambios.
+3. En **Environment Variables** añade para Production, Preview y Development:
+
+   - `NEXT_PUBLIC_SUPABASE_URL`: la URL del proyecto Supabase.
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: la clave publishable del proyecto.
+   - `NEXT_PUBLIC_APP_URL`: el dominio de producción completo, por ejemplo
+     `https://notion-para-mi.vercel.app`. No dejes esta variable vacía.
+
+4. Pulsa **Deploy**. Los siguientes commits a `main` se publicarán
+   automáticamente.
+5. En Supabase abre **Authentication → URL Configuration** y configura:
+
+   - **Site URL**: el dominio de producción de Vercel.
+   - **Redirect URLs**: añade `https://TU-DOMINIO/auth/callback`.
+   - Para previews, puedes añadir también `https://*-TU-EQUIPO.vercel.app/auth/callback`.
+
+6. Verifica registro, login, edición, archivos y un enlace público desde el
+   dominio desplegado. No configures `SUPABASE_SERVICE_ROLE_KEY`: esta
+   aplicación utiliza RLS y la clave pública de Supabase.

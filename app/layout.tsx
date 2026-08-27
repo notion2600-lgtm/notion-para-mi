@@ -4,7 +4,15 @@ import { ThemeProvider } from "@/components/providers/theme-provider";
 
 import "./globals.css";
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+const vercelUrl =
+  process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() ||
+  process.env.VERCEL_URL?.trim();
+const appUrl = configuredAppUrl
+  ? configuredAppUrl
+  : vercelUrl
+    ? `https://${vercelUrl}`
+    : "http://localhost:3000";
 
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),

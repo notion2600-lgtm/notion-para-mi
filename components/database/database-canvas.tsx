@@ -12,6 +12,7 @@ import {
   SquareKanban,
   List,
   ListPlus,
+  LoaderCircle,
   Maximize2,
   Plus,
   SlidersHorizontal,
@@ -50,6 +51,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -201,6 +203,16 @@ export function DatabaseCanvas({
     });
   }
 
+  async function createColumn(name: string, type: DatabasePropertyType) {
+    const property = await createProperty(type, name);
+    if (property && activeView?.visible_properties.length) {
+      await updateView(activeView.id, {
+        visible_properties: [...activeView.visible_properties, property.id],
+      });
+    }
+    return property;
+  }
+
   return (
     <section className="relative mx-auto w-full max-w-[1400px] px-4 pb-28 pt-10 sm:px-10 sm:pt-16">
       <div className="mb-2 text-5xl">{database.icon || "📊"}</div>
@@ -332,6 +344,7 @@ export function DatabaseCanvas({
           columnWidths={columnWidths}
           currentUser={currentUser}
           database={database}
+          onCreateProperty={createColumn}
           onCreateRow={onCreateRow}
           onOpenRow={(rowId) => setPeekRowId(rowId)}
           onResolveFileUrl={onResolveFileUrl}
@@ -379,6 +392,10 @@ type ViewSurfaceProps = {
   columnWidths: Record<string, number>;
   currentUser: { id: string; label: string };
   database: WorkspacePage;
+  onCreateProperty: (
+    name: string,
+    type: DatabasePropertyType,
+  ) => Promise<DatabaseProperty | null>;
   onCreateRow: () => Promise<WorkspacePage | null>;
   onOpenRow: (rowId: string) => void;
   onResolveFileUrl: (path: string) => Promise<string>;
@@ -415,6 +432,7 @@ function TableView({
   columnWidths,
   currentUser,
   database,
+  onCreateProperty,
   onCreateRow,
   onOpenRow,
   onResizeColumn,
@@ -488,7 +506,9 @@ function TableView({
                 </th>
               );
             })}
-            <th className="border-b px-2" />
+            <th className="border-b px-1 text-center">
+              <AddColumnButton onCreateProperty={onCreateProperty} />
+            </th>
           </tr>
         </thead>
         {groups.map((group) => (
@@ -550,6 +570,129 @@ function TableView({
       <EmptyRows rows={rows} />
       <NewRowButton onCreateRow={onCreateRow} />
     </div>
+  );
+}
+
+function AddColumnButton({
+  onCreateProperty,
+}: {
+  onCreateProperty: (
+    name: string,
+    type: DatabasePropertyType,
+  ) => Promise<DatabaseProperty | null>;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [name, setName] = useState("");
+  const [type, setType] = useState<DatabasePropertyType>("text");
+
+  useEffect(() => {
+    if (!isOpen) return;
+    inputRef.current?.focus();
+    function close(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsOpen(false);
+    }
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [isOpen]);
+
+  async function submit() {
+    if (isSaving) return;
+    setIsSaving(true);
+    const property = await onCreateProperty(name.trim() || "Propiedad", type);
+    setIsSaving(false);
+    if (!property) return;
+    setName("");
+    setType("text");
+    setIsOpen(false);
+  }
+
+  return (
+    <>
+      <button
+        aria-label="Añadir columna"
+        className="mx-auto grid size-8 place-items-center rounded-md text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700"
+        onClick={() => setIsOpen(true)}
+        title="Añadir columna"
+        type="button"
+      >
+        <Plus className="size-4" />
+      </button>
+      {isOpen && (
+        <div
+          aria-label="Añadir columna"
+          aria-modal="true"
+          className="fixed inset-0 z-[80] grid place-items-center bg-black/30 p-4"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setIsOpen(false);
+          }}
+          role="dialog"
+        >
+          <form
+            className="w-full max-w-sm rounded-xl border bg-white p-5 text-left text-zinc-900 shadow-2xl"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submit();
+            }}
+          >
+            <div className="flex items-start gap-3">
+              <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-indigo-50 text-indigo-600">
+                <Columns3 className="size-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-sm font-semibold">Nueva columna</h2>
+                <p className="mt-1 text-xs leading-5 text-zinc-500">
+                  Elige el nombre y el tipo de información que guardarás.
+                </p>
+              </div>
+              <button
+                aria-label="Cerrar"
+                className="grid size-8 place-items-center rounded-md text-zinc-400 hover:bg-zinc-100"
+                onClick={() => setIsOpen(false)}
+                type="button"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+            <label className="mt-5 block text-xs font-medium text-zinc-600">
+              Nombre
+              <input
+                className="mt-1.5 h-10 w-full rounded-md border px-3 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
+                maxLength={80}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Ej. Estado, Fecha o Plataforma"
+                ref={inputRef}
+                value={name}
+              />
+            </label>
+            <label className="mt-4 block text-xs font-medium text-zinc-600">
+              Tipo de propiedad
+              <select
+                className="mt-1.5 h-10 w-full rounded-md border bg-white px-3 text-sm"
+                onChange={(event) => setType(event.target.value as DatabasePropertyType)}
+                value={type}
+              >
+                {DATABASE_PROPERTY_TYPES.map((propertyType) => (
+                  <option key={propertyType.value} value={propertyType.value}>
+                    {propertyType.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button onClick={() => setIsOpen(false)} type="button" variant="ghost">
+                Cancelar
+              </Button>
+              <Button disabled={isSaving} type="submit">
+                {isSaving ? <LoaderCircle className="size-4 animate-spin" /> : <Plus className="size-4" />}
+                Añadir columna
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
+    </>
   );
 }
 

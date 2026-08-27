@@ -67,12 +67,15 @@ export function useDatabaseProperties(databaseId: string) {
     queryClient.setQueryData(queryKey, properties);
   }
 
-  async function createProperty(type: DatabasePropertyType = "text") {
+  async function createProperty(
+    type: DatabasePropertyType = "text",
+    requestedName?: string,
+  ) {
     const previous = current();
     const property: DatabaseProperty = {
       config: defaultConfig(type),
       id: crypto.randomUUID(),
-      name: PROPERTY_NAMES[type],
+      name: requestedName?.trim() || PROPERTY_NAMES[type],
       page_id: databaseId,
       position: previous.length
         ? Math.max(...previous.map((item) => Number(item.position))) + 1000
@@ -86,6 +89,7 @@ export function useDatabaseProperties(databaseId: string) {
       toast.error("No se pudo crear la propiedad", { description: error.message });
       return null;
     }
+    toast.success("Columna añadida");
     return property;
   }
 

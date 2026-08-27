@@ -581,26 +581,66 @@ function AddColumnButton({
     type: DatabasePropertyType,
   ) => Promise<DatabaseProperty | null>;
 }) {
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [name, setName] = useState("");
   const [type, setType] = useState<DatabasePropertyType>("text");
+  const [position, setPosition] = useState({ left: 12, top: 12 });
 
   useEffect(() => {
     if (!isOpen) return;
-    inputRef.current?.focus();
-    function close(event: KeyboardEvent) {
+    if (!buttonRef.current) return;
+    const button = buttonRef.current as HTMLButtonElement;
+
+    function positionMenu() {
+      const rect = button.getBoundingClientRect();
+      const menuWidth = Math.min(390, window.innerWidth - 24);
+      const menuHeight = menuRef.current?.offsetHeight ?? Math.min(480, window.innerHeight - 24);
+      const preferredLeft = rect.right - menuWidth;
+      const hasRoomBelow = window.innerHeight - rect.bottom >= Math.min(menuHeight, 280);
+      setPosition({
+        left: Math.max(12, Math.min(preferredLeft, window.innerWidth - menuWidth - 12)),
+        top: hasRoomBelow ? rect.bottom + 6 : Math.max(12, rect.top - menuHeight - 6),
+      });
+    }
+
+    function closeOnKey(event: KeyboardEvent) {
       if (event.key === "Escape") setIsOpen(false);
     }
-    window.addEventListener("keydown", close);
-    return () => window.removeEventListener("keydown", close);
+
+    function closeOutside(event: MouseEvent) {
+      const target = event.target as Node;
+      if (!menuRef.current?.contains(target) && !button.contains(target)) {
+        setIsOpen(false);
+      }
+    }
+
+    positionMenu();
+    const focusTimer = window.setTimeout(() => inputRef.current?.focus(), 0);
+    window.addEventListener("keydown", closeOnKey);
+    window.addEventListener("mousedown", closeOutside);
+    window.addEventListener("resize", positionMenu);
+    window.addEventListener("scroll", positionMenu, true);
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener("keydown", closeOnKey);
+      window.removeEventListener("mousedown", closeOutside);
+      window.removeEventListener("resize", positionMenu);
+      window.removeEventListener("scroll", positionMenu, true);
+    };
   }, [isOpen]);
 
-  async function submit() {
+  async function submit(selectedType = type) {
     if (isSaving) return;
     setIsSaving(true);
-    const property = await onCreateProperty(name.trim() || "Propiedad", type);
+    setType(selectedType);
+    const property = await onCreateProperty(
+      name.trim() || DATABASE_PROPERTY_TYPES.find((item) => item.value === selectedType)?.label || "Propiedad",
+      selectedType,
+    );
     setIsSaving(false);
     if (!property) return;
     setName("");
@@ -612,8 +652,11 @@ function AddColumnButton({
     <>
       <button
         aria-label="Añadir columna"
+        aria-expanded={isOpen}
+        aria-haspopup="dialog"
         className="mx-auto grid size-8 place-items-center rounded-md text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700"
-        onClick={() => setIsOpen(true)}
+        onClick={() => setIsOpen((open) => !open)}
+        ref={buttonRef}
         title="Añadir columna"
         type="button"
       >
@@ -622,74 +665,62 @@ function AddColumnButton({
       {isOpen && (
         <div
           aria-label="Añadir columna"
-          aria-modal="true"
-          className="fixed inset-0 z-[80] grid place-items-center bg-black/30 p-4"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setIsOpen(false);
-          }}
+          className="fixed z-[80] flex w-[min(390px,calc(100vw-24px))] flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white text-left font-normal text-zinc-900 shadow-[0_12px_32px_rgba(0,0,0,0.16)]"
+          ref={menuRef}
           role="dialog"
+          style={{
+            left: position.left,
+            maxHeight: `calc(100vh - ${position.top}px - 12px)`,
+            top: position.top,
+          }}
         >
           <form
-            className="w-full max-w-sm rounded-xl border bg-white p-5 text-left text-zinc-900 shadow-2xl"
+            className="border-b border-zinc-100 p-2"
             onSubmit={(event) => {
               event.preventDefault();
               void submit();
             }}
           >
-            <div className="flex items-start gap-3">
-              <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-indigo-50 text-indigo-600">
-                <Columns3 className="size-4" />
+            <label className="flex h-10 items-center gap-2 rounded-lg px-2 focus-within:bg-zinc-50">
+              <span className="grid size-7 shrink-0 place-items-center rounded-md bg-zinc-100 text-sm font-semibold text-zinc-500">
+                {propertyTypeIcon(type)}
               </span>
-              <div className="min-w-0 flex-1">
-                <h2 className="text-sm font-semibold">Nueva columna</h2>
-                <p className="mt-1 text-xs leading-5 text-zinc-500">
-                  Elige el nombre y el tipo de información que guardarás.
-                </p>
-              </div>
-              <button
-                aria-label="Cerrar"
-                className="grid size-8 place-items-center rounded-md text-zinc-400 hover:bg-zinc-100"
-                onClick={() => setIsOpen(false)}
-                type="button"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-            <label className="mt-5 block text-xs font-medium text-zinc-600">
-              Nombre
               <input
-                className="mt-1.5 h-10 w-full rounded-md border px-3 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
+                aria-label="Nombre de la propiedad"
+                className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-zinc-400"
                 maxLength={80}
                 onChange={(event) => setName(event.target.value)}
-                placeholder="Ej. Estado, Fecha o Plataforma"
+                placeholder="Escribe el nombre de la propiedad..."
                 ref={inputRef}
                 value={name}
               />
+              {isSaving && <LoaderCircle className="size-4 shrink-0 animate-spin text-zinc-400" />}
             </label>
-            <label className="mt-4 block text-xs font-medium text-zinc-600">
-              Tipo de propiedad
-              <select
-                className="mt-1.5 h-10 w-full rounded-md border bg-white px-3 text-sm"
-                onChange={(event) => setType(event.target.value as DatabasePropertyType)}
-                value={type}
-              >
-                {DATABASE_PROPERTY_TYPES.map((propertyType) => (
-                  <option key={propertyType.value} value={propertyType.value}>
-                    {propertyType.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="mt-5 flex justify-end gap-2">
-              <Button onClick={() => setIsOpen(false)} type="button" variant="ghost">
-                Cancelar
-              </Button>
-              <Button disabled={isSaving} type="submit">
-                {isSaving ? <LoaderCircle className="size-4 animate-spin" /> : <Plus className="size-4" />}
-                Añadir columna
-              </Button>
-            </div>
           </form>
+          <div className="overflow-y-auto p-2">
+            <p className="px-2 pb-1.5 pt-1 text-xs font-medium text-zinc-500">
+              Seleccionar tipo
+            </p>
+            <div className="grid grid-cols-2 gap-0.5">
+              {DATABASE_PROPERTY_TYPES.map((propertyType) => (
+                <button
+                  className="flex min-h-9 items-center gap-2 rounded-md px-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 disabled:cursor-wait disabled:opacity-60"
+                  disabled={isSaving}
+                  key={propertyType.value}
+                  onClick={() => void submit(propertyType.value)}
+                  type="button"
+                >
+                  <span className="w-5 shrink-0 text-center text-sm font-medium text-zinc-500">
+                    {propertyTypeIcon(propertyType.value)}
+                  </span>
+                  <span className="truncate">{propertyType.label}</span>
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 border-t border-zinc-100 px-2 pb-1 pt-2 text-[11px] text-zinc-400">
+              Escribe un nombre y elige el tipo para crear la columna.
+            </p>
+          </div>
         </div>
       )}
     </>

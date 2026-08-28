@@ -62,6 +62,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Backlinks } from "@/components/workspace/page-canvas";
@@ -159,9 +160,15 @@ export function DatabaseCanvas({
 
   useEffect(() => setTitle(database.title), [database.id, database.title]);
   useEffect(() => {
-    setActiveViewId((current) =>
-      views.some((view) => view.id === current) ? current : (views[0]?.id ?? null),
-    );
+    const linkedViewId = new URL(window.location.href).searchParams.get("view");
+    setActiveViewId((current) => {
+      if (linkedViewId && views.some((view) => view.id === linkedViewId)) {
+        return linkedViewId;
+      }
+      return views.some((view) => view.id === current)
+        ? current
+        : (views[0]?.id ?? null);
+    });
   }, [database.id, views]);
   useEffect(() => {
     setSelected((current) => {
@@ -233,7 +240,22 @@ export function DatabaseCanvas({
       sorts: source.sorts.map((sort) => ({ ...sort, id: crypto.randomUUID() })),
       visible_properties: [...source.visible_properties],
     });
-    if (saved) setActiveViewId(duplicate.id);
+    if (saved) selectView(duplicate.id);
+  }
+
+  function selectView(viewId: string) {
+    setActiveViewId(viewId);
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", viewId);
+    window.history.replaceState(window.history.state, "", url);
+  }
+
+  async function copyViewLink(viewId?: string) {
+    const url = new URL(window.location.href);
+    if (viewId) url.searchParams.set("view", viewId);
+    else url.searchParams.delete("view");
+    await navigator.clipboard.writeText(url.toString());
+    toast.success(viewId ? "Enlace de la vista copiado" : "Enlace del origen copiado");
   }
 
   function visiblePropertyIds() {
@@ -349,8 +371,16 @@ export function DatabaseCanvas({
             isMenuOpen={viewTabMenuId === view.id}
             key={view.id}
             onDelete={async () => {
-              if (await deleteView(view.id)) setViewTabMenuId(null);
+              if (await deleteView(view.id)) {
+                setViewTabMenuId(null);
+                if (activeView?.id === view.id) {
+                  const next = views.find((item) => item.id !== view.id);
+                  if (next) selectView(next.id);
+                }
+              }
             }}
+            onCopyLink={() => copyViewLink(view.id)}
+            onCopySourceLink={() => copyViewLink()}
             onDuplicate={() => {
               setViewTabMenuId(null);
               void duplicateView(view);
@@ -362,13 +392,15 @@ export function DatabaseCanvas({
             }}
             onMenuToggle={() => {
               setViewMenuOpen(false);
+              selectView(view.id);
               setViewTabMenuId((current) => (current === view.id ? null : view.id));
             }}
             onSelect={() => {
-              setActiveViewId(view.id);
+              selectView(view.id);
               setViewTabMenuId(null);
             }}
             onUpdate={(changes) => updateView(view.id, changes)}
+            sourceName={database.title}
             view={view}
           />
         ))}
@@ -394,7 +426,7 @@ export function DatabaseCanvas({
                   key={viewType.value}
                   onClick={async () => {
                     const view = await createView(viewType.value);
-                    if (view) setActiveViewId(view.id);
+                    if (view) selectView(view.id);
                     setViewMenuOpen(false);
                   }}
                   type="button"
@@ -2133,16 +2165,21 @@ function NewRowButton({ onCreateRow }: { onCreateRow: () => Promise<WorkspacePag
 function ViewTab({
   active,
   isMenuOpen,
+  onCopyLink,
+  onCopySourceLink,
   onDelete,
   onDuplicate,
   onEdit,
   onMenuToggle,
   onSelect,
   onUpdate,
+  sourceName,
   view,
 }: {
   active: boolean;
   isMenuOpen: boolean;
+  onCopyLink: () => Promise<void>;
+  onCopySourceLink: () => Promise<void>;
   onDelete: () => Promise<void>;
   onDuplicate: () => void;
   onEdit: () => void;
@@ -2151,10 +2188,27 @@ function ViewTab({
   onUpdate: (
     changes: Partial<Pick<DatabaseView, "name" | "type" | "group_by">>,
   ) => Promise<boolean>;
+  sourceName: string;
   view: DatabaseView;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
+  const renameRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const [originOpen, setOriginOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [typeOpen, setTypeOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isMenuOpen) {
+      setOriginOpen(false);
+      setRenameOpen(false);
+      setTypeOpen(false);
+    }
+  }, [isMenuOpen]);
+
+  useEffect(() => {
+    if (renameOpen) renameRef.current?.focus();
+  }, [renameOpen]);
 
   useEffect(() => {
     if (!isMenuOpen) return;
@@ -2169,79 +2223,128 @@ function ViewTab({
   }, [isMenuOpen, onMenuToggle]);
 
   return (
-    <div className="relative flex h-10 items-stretch">
+    <div className="group relative flex h-10 items-stretch">
       <button
         className={`flex items-center gap-2 border-b-2 pl-3 text-xs font-medium transition-colors ${
           active
             ? "border-zinc-900 text-zinc-900"
             : "border-transparent text-zinc-500 hover:text-zinc-800"
-        } ${active ? "pr-1" : "pr-3"}`}
+        } pr-1`}
         onClick={onSelect}
         type="button"
       >
         <ViewTypeIcon type={view.type} /> {view.name}
       </button>
-      {active && (
-        <button
-          aria-expanded={isMenuOpen}
-          aria-label={`Opciones de ${view.name}`}
-          className="border-b-2 border-zinc-900 pr-2 text-zinc-400 hover:text-zinc-800"
-          onClick={onMenuToggle}
-          ref={triggerRef}
-          type="button"
-        >
-          <ChevronDown className="size-3.5" />
-        </button>
-      )}
+      <button
+        aria-expanded={isMenuOpen}
+        aria-label={`Opciones de ${view.name}`}
+        className={`border-b-2 pr-2 text-zinc-400 hover:text-zinc-800 ${
+          active ? "border-zinc-900" : "border-transparent"
+        } ${active || isMenuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+        onClick={onMenuToggle}
+        ref={triggerRef}
+        type="button"
+      >
+        <ChevronDown className="size-3.5" />
+      </button>
       {isMenuOpen && (
         <div
-          className="absolute left-0 top-10 z-40 w-[min(300px,calc(100vw-24px))] rounded-xl border border-zinc-200 bg-white p-2 text-sm font-normal shadow-[0_12px_32px_rgba(0,0,0,0.16)]"
+          className="absolute left-0 top-10 z-40 w-[min(290px,calc(100vw-24px))] rounded-xl border border-zinc-200 bg-white p-1.5 text-sm font-normal shadow-[0_12px_32px_rgba(0,0,0,0.16)]"
           ref={menuRef}
         >
-          <label className="flex h-10 items-center gap-2 rounded-lg bg-zinc-50 px-2 focus-within:ring-2 focus-within:ring-indigo-100">
-            <Pencil className="size-4 text-zinc-400" />
-            <input
-              aria-label="Renombrar vista"
-              className="min-w-0 flex-1 bg-transparent outline-none"
-              defaultValue={view.name}
-              key={view.name}
-              onBlur={(event) => {
-                const name = event.target.value.trim() || "Vista";
-                if (name !== view.name) void onUpdate({ name });
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") event.currentTarget.blur();
-              }}
-            />
-          </label>
-
-          <p className="mb-1 mt-3 px-2 text-[11px] font-medium uppercase tracking-wide text-zinc-400">
-            Mostrar como
-          </p>
-          <div className="grid grid-cols-3 gap-1">
-            {DATABASE_VIEW_TYPES.map((type) => (
-              <button
-                className={`flex flex-col items-center gap-1.5 rounded-lg px-2 py-2 text-xs hover:bg-zinc-100 ${
-                  view.type === type.value ? "bg-zinc-100 text-zinc-900" : "text-zinc-600"
-                }`}
-                key={type.value}
-                onClick={() =>
-                  void onUpdate({ group_by: null, type: type.value })
-                }
-                type="button"
-              >
-                <ViewTypeIcon type={type.value} /> {type.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-2 border-t border-zinc-100 pt-1.5">
+          {renameOpen ? (
+            <label className="mb-1 flex h-10 items-center gap-2 rounded-lg bg-zinc-50 px-2 ring-2 ring-indigo-100">
+              <Pencil className="size-4 text-zinc-400" />
+              <input
+                aria-label="Renombrar vista"
+                className="min-w-0 flex-1 bg-transparent outline-none"
+                defaultValue={view.name}
+                key={view.name}
+                onBlur={(event) => {
+                  const name = event.target.value.trim() || "Vista";
+                  if (name !== view.name) void onUpdate({ name });
+                  setRenameOpen(false);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.currentTarget.blur();
+                }}
+                ref={renameRef}
+              />
+            </label>
+          ) : (
             <button
               className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-zinc-700 hover:bg-zinc-100"
-              onClick={onEdit}
+              onClick={() => setRenameOpen(true)}
               type="button"
             >
-              <SlidersHorizontal className="size-4 text-zinc-500" /> Editar vista
+              <Pencil className="size-4 text-zinc-500" /> Renombrar
+            </button>
+          )}
+
+          <button
+            className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-zinc-700 hover:bg-zinc-100"
+            onClick={() => setTypeOpen((open) => !open)}
+            type="button"
+          >
+            <ViewTypeIcon type={view.type} /> Mostrar como
+            <ChevronRight className={`ml-auto size-4 text-zinc-400 transition-transform ${typeOpen ? "rotate-90" : ""}`} />
+          </button>
+          {typeOpen && (
+            <div className="mb-1 grid grid-cols-3 gap-1 rounded-lg bg-zinc-50 p-1">
+              {DATABASE_VIEW_TYPES.map((type) => (
+                <button
+                  className={`flex flex-col items-center gap-1.5 rounded-lg px-2 py-2 text-xs hover:bg-white ${
+                    view.type === type.value ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-600"
+                  }`}
+                  key={type.value}
+                  onClick={() => {
+                    void onUpdate({ group_by: null, type: type.value });
+                    setTypeOpen(false);
+                  }}
+                  type="button"
+                >
+                  <ViewTypeIcon type={type.value} /> {type.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <button
+            className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-zinc-700 hover:bg-zinc-100"
+            onClick={onEdit}
+            type="button"
+          >
+            <SlidersHorizontal className="size-4 text-zinc-500" /> Editar vista
+          </button>
+          <button
+            className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-zinc-700 hover:bg-zinc-100"
+            onClick={() => setOriginOpen((open) => !open)}
+            type="button"
+          >
+            <Group className="size-4 text-zinc-500" /> Origen
+            <span className="ml-auto max-w-28 truncate text-xs text-zinc-400">{sourceName}</span>
+            <ChevronRight className={`size-4 shrink-0 text-zinc-400 transition-transform ${originOpen ? "rotate-90" : ""}`} />
+          </button>
+          {originOpen && (
+            <div className="mb-1 rounded-lg bg-zinc-50 p-1">
+              <p className="truncate px-2 py-1.5 text-xs font-medium text-zinc-600">{sourceName}</p>
+              <button
+                className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs text-zinc-600 hover:bg-white"
+                onClick={() => void onCopySourceLink()}
+                type="button"
+              >
+                <Copy className="size-3.5" /> Copiar enlace del origen
+              </button>
+            </div>
+          )}
+
+          <div className="border-t border-zinc-100 pt-1.5">
+            <button
+              className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-zinc-700 hover:bg-zinc-100"
+              onClick={() => void onCopyLink()}
+              type="button"
+            >
+              <Copy className="size-4 text-zinc-500" /> Copiar enlace de la vista
             </button>
             <button
               className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-zinc-700 hover:bg-zinc-100"
@@ -2260,6 +2363,15 @@ function ViewTab({
               <Trash2 className="size-4" /> Eliminar vista
             </button>
           </div>
+          {view.type === "calendar" && (
+            <button
+              className="mt-1 flex h-9 w-full items-center gap-2 border-t border-zinc-100 px-2 pt-1 text-left text-zinc-700 hover:bg-zinc-100"
+              onClick={onEdit}
+              type="button"
+            >
+              <CalendarDays className="size-4 text-zinc-500" /> Configurar calendario
+            </button>
+          )}
         </div>
       )}
     </div>

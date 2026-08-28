@@ -99,9 +99,11 @@ export function useDatabaseProperties(databaseId: string) {
   ) {
     const previous = current();
     setProperties(
-      previous.map((property) =>
-        property.id === propertyId ? { ...property, ...changes } : property,
-      ),
+      previous
+        .map((property) =>
+          property.id === propertyId ? { ...property, ...changes } : property,
+        )
+        .sort((a, b) => Number(a.position) - Number(b.position)),
     );
     const { error } = await supabase
       .from("db_properties")

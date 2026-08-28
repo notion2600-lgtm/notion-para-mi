@@ -5,17 +5,24 @@ import {
   Columns3,
   ArrowDown,
   ArrowUp,
+  ChevronDown,
   ChevronRight,
+  Copy,
   Eye,
   EyeOff,
+  Filter,
   GalleryVerticalEnd,
+  Group,
   SquareKanban,
   List,
   ListPlus,
   LoaderCircle,
   Maximize2,
+  Pencil,
   Plus,
   SlidersHorizontal,
+  SortAsc,
+  SortDesc,
   Settings2,
   Table2,
   Trash2,
@@ -124,6 +131,7 @@ export function DatabaseCanvas({
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [viewControlsOpen, setViewControlsOpen] = useState(false);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  const [viewTabMenuId, setViewTabMenuId] = useState<string | null>(null);
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
   const [newPropertyType, setNewPropertyType] =
     useState<DatabasePropertyType>("text");
@@ -168,6 +176,7 @@ export function DatabaseCanvas({
       setPropertiesOpen(false);
       setViewControlsOpen(false);
       setViewMenuOpen(false);
+      setViewTabMenuId(null);
     }
     window.addEventListener("keydown", closePanels);
     return () => window.removeEventListener("keydown", closePanels);
@@ -214,6 +223,111 @@ export function DatabaseCanvas({
     return property;
   }
 
+  async function duplicateView(source: DatabaseView) {
+    const duplicate = await createView(source.type);
+    if (!duplicate) return;
+    const saved = await updateView(duplicate.id, {
+      filters: normalizeFilters(source.filters),
+      group_by: source.group_by,
+      name: `${source.name} copia`,
+      sorts: source.sorts.map((sort) => ({ ...sort, id: crypto.randomUUID() })),
+      visible_properties: [...source.visible_properties],
+    });
+    if (saved) setActiveViewId(duplicate.id);
+  }
+
+  function visiblePropertyIds() {
+    if (!activeView) return [];
+    return activeView.visible_properties.length
+      ? activeView.visible_properties.filter((id) => id !== "__none")
+      : properties.filter((property) => !property.config.hidden).map((property) => property.id);
+  }
+
+  async function insertProperty(
+    target: DatabaseProperty,
+    direction: "left" | "right",
+  ) {
+    const ordered = [...properties].sort(
+      (a, b) => Number(a.position) - Number(b.position),
+    );
+    const targetIndex = ordered.findIndex((property) => property.id === target.id);
+    const neighbor =
+      direction === "left" ? ordered[targetIndex - 1] : ordered[targetIndex + 1];
+    const property = await createProperty("text", "Propiedad");
+    if (!property) return null;
+    const position =
+      direction === "left"
+        ? neighbor
+          ? (Number(neighbor.position) + Number(target.position)) / 2
+          : Number(target.position) - 1000
+        : neighbor
+          ? (Number(target.position) + Number(neighbor.position)) / 2
+          : Number(target.position) + 1000;
+    await updateProperty(property.id, { position });
+    if (activeView?.visible_properties.length) {
+      const ids = visiblePropertyIds();
+      const index = ids.indexOf(target.id);
+      ids.splice(direction === "left" ? index : index + 1, 0, property.id);
+      await updateView(activeView.id, { visible_properties: ids });
+    }
+    return property;
+  }
+
+  async function duplicateProperty(source: DatabaseProperty) {
+    const duplicate = await insertProperty(source, "right");
+    if (!duplicate) return;
+    await updateProperty(duplicate.id, {
+      config: { ...source.config, options: source.config.options?.map((option) => ({ ...option })) },
+      name: `${source.name} copia`,
+      type: source.type,
+    });
+    await Promise.all(
+      rows.map((row) =>
+        onUpdatePage(row.id, {
+          properties: {
+            ...row.properties,
+            [duplicate.id]: row.properties[source.id],
+          },
+        }),
+      ),
+    );
+  }
+
+  function filterByProperty(property: DatabaseProperty) {
+    if (!activeView) return;
+    const filters = normalizeFilters(activeView.filters);
+    void updateView(activeView.id, {
+      filters: {
+        ...filters,
+        rules: [
+          ...filters.rules,
+          {
+            id: crypto.randomUUID(),
+            operator: operatorsForType(property.type)[0].value,
+            property_id: property.id,
+            value: "",
+          },
+        ],
+      },
+    });
+    setViewControlsOpen(true);
+  }
+
+  function sortByProperty(property: DatabaseProperty, direction: "asc" | "desc") {
+    if (!activeView) return;
+    const existing = activeView.sorts.find((sort) => sort.property_id === property.id);
+    void updateView(activeView.id, {
+      sorts: existing
+        ? activeView.sorts.map((sort) =>
+            sort.id === existing.id ? { ...sort, direction } : sort,
+          )
+        : [
+            ...activeView.sorts,
+            { direction, id: crypto.randomUUID(), property_id: property.id },
+          ],
+    });
+  }
+
   return (
     <section className="relative mx-auto w-full max-w-[1400px] px-4 pb-28 pt-10 sm:px-10 sm:pt-16">
       <div className="mb-2 text-5xl">{database.icon || "📊"}</div>
@@ -230,33 +344,53 @@ export function DatabaseCanvas({
 
       <div className="mt-8 flex min-h-10 flex-wrap items-center gap-1 border-b">
         {views.map((view) => (
-          <button
-            className={`flex h-10 items-center gap-2 border-b-2 px-3 text-xs font-medium transition-colors ${
-              activeView?.id === view.id
-                ? "border-zinc-900 text-zinc-900"
-                : "border-transparent text-zinc-500 hover:text-zinc-800"
-            }`}
+          <ViewTab
+            active={activeView?.id === view.id}
+            isMenuOpen={viewTabMenuId === view.id}
             key={view.id}
-            onClick={() => setActiveViewId(view.id)}
-            type="button"
-          >
-            <ViewTypeIcon type={view.type} /> {view.name}
-          </button>
+            onDelete={async () => {
+              if (await deleteView(view.id)) setViewTabMenuId(null);
+            }}
+            onDuplicate={() => {
+              setViewTabMenuId(null);
+              void duplicateView(view);
+            }}
+            onEdit={() => {
+              setActiveViewId(view.id);
+              setViewControlsOpen(true);
+              setViewTabMenuId(null);
+            }}
+            onMenuToggle={() => {
+              setViewMenuOpen(false);
+              setViewTabMenuId((current) => (current === view.id ? null : view.id));
+            }}
+            onSelect={() => {
+              setActiveViewId(view.id);
+              setViewTabMenuId(null);
+            }}
+            onUpdate={(changes) => updateView(view.id, changes)}
+            view={view}
+          />
         ))}
         <div className="relative">
           <button
             aria-label="Añadir vista"
             className="grid size-8 place-items-center rounded-md text-zinc-500 hover:bg-zinc-100"
-            onClick={() => setViewMenuOpen((open) => !open)}
+            onClick={() => {
+              setViewTabMenuId(null);
+              setViewMenuOpen((open) => !open);
+            }}
             type="button"
           >
             <Plus className="size-4" />
           </button>
           {viewMenuOpen && (
-            <div className="absolute left-0 top-9 z-30 w-44 rounded-lg border bg-white p-1 shadow-xl">
+            <div className="absolute left-0 top-9 z-30 w-[min(390px,calc(100vw-32px))] rounded-xl border border-zinc-200 bg-white p-3 shadow-[0_12px_32px_rgba(0,0,0,0.16)]">
+              <p className="mb-2 px-1 text-xs font-medium text-zinc-500">Añade una nueva vista</p>
+              <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
               {DATABASE_VIEW_TYPES.map((viewType) => (
                 <button
-                  className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-xs hover:bg-zinc-100"
+                  className="flex min-h-20 flex-col items-center justify-center gap-2 rounded-lg px-3 text-center text-xs text-zinc-700 hover:bg-zinc-100"
                   key={viewType.value}
                   onClick={async () => {
                     const view = await createView(viewType.value);
@@ -265,9 +399,11 @@ export function DatabaseCanvas({
                   }}
                   type="button"
                 >
-                  <ViewTypeIcon type={viewType.value} /> {viewType.label}
+                  <span className="grid size-8 place-items-center rounded-lg bg-zinc-100 text-zinc-700"><ViewTypeIcon type={viewType.value} /></span>
+                  {viewType.label}
                 </button>
               ))}
+              </div>
             </div>
           )}
         </div>
@@ -348,11 +484,24 @@ export function DatabaseCanvas({
           onCreateProperty={createColumn}
           onCreateRow={onCreateRow}
           onDeleteProperty={deleteProperty}
+          onDuplicateProperty={duplicateProperty}
+          onFilterProperty={filterByProperty}
+          onGroupProperty={(property) =>
+            void updateView(activeView.id, { group_by: property.id })
+          }
+          onHideProperty={(property) => {
+            const ids = visiblePropertyIds().filter((id) => id !== property.id);
+            return updateView(activeView.id, {
+              visible_properties: ids.length ? ids : ["__none"],
+            });
+          }}
+          onInsertProperty={insertProperty}
           onOpenRow={(rowId) => setPeekRowId(rowId)}
           onResolveFileUrl={onResolveFileUrl}
           onResizeColumn={(propertyId, width) =>
             setColumnWidths((current) => ({ ...current, [propertyId]: width }))
           }
+          onSortProperty={sortByProperty}
           onToggleRow={toggleRow}
           onUpdatePage={onUpdatePage}
           onUpdateProperty={updateProperty}
@@ -400,9 +549,18 @@ type ViewSurfaceProps = {
   ) => Promise<DatabaseProperty | null>;
   onCreateRow: () => Promise<WorkspacePage | null>;
   onDeleteProperty: (propertyId: string) => Promise<boolean>;
+  onDuplicateProperty: (property: DatabaseProperty) => Promise<void>;
+  onFilterProperty: (property: DatabaseProperty) => void;
+  onGroupProperty: (property: DatabaseProperty) => void;
+  onHideProperty: (property: DatabaseProperty) => Promise<boolean>;
+  onInsertProperty: (
+    property: DatabaseProperty,
+    direction: "left" | "right",
+  ) => Promise<DatabaseProperty | null>;
   onOpenRow: (rowId: string) => void;
   onResolveFileUrl: (path: string) => Promise<string>;
   onResizeColumn: (propertyId: string, width: number) => void;
+  onSortProperty: (property: DatabaseProperty, direction: "asc" | "desc") => void;
   onToggleRow: (rowId: string) => void;
   onUpdatePage: (pageId: string, changes: Partial<WorkspacePage>) => Promise<boolean>;
   onUpdateProperty: (
@@ -438,8 +596,14 @@ function TableView({
   onCreateProperty,
   onCreateRow,
   onDeleteProperty,
+  onDuplicateProperty,
+  onFilterProperty,
+  onGroupProperty,
+  onHideProperty,
+  onInsertProperty,
   onOpenRow,
   onResizeColumn,
+  onSortProperty,
   onToggleRow,
   onUpdatePage,
   onUpdateProperty,
@@ -501,6 +665,12 @@ function TableView({
                 <th className="relative border-b border-r p-0" key={property.id}>
                   <ColumnHeaderEditor
                     onDelete={onDeleteProperty}
+                    onDuplicate={onDuplicateProperty}
+                    onFilter={onFilterProperty}
+                    onGroup={onGroupProperty}
+                    onHide={onHideProperty}
+                    onInsert={onInsertProperty}
+                    onSort={onSortProperty}
                     onUpdate={onUpdateProperty}
                     property={property}
                   />
@@ -713,10 +883,25 @@ function TitleColumnHeader({
 
 function ColumnHeaderEditor({
   onDelete,
+  onDuplicate,
+  onFilter,
+  onGroup,
+  onHide,
+  onInsert,
+  onSort,
   onUpdate,
   property,
 }: {
   onDelete: (propertyId: string) => Promise<boolean>;
+  onDuplicate: (property: DatabaseProperty) => Promise<void>;
+  onFilter: (property: DatabaseProperty) => void;
+  onGroup: (property: DatabaseProperty) => void;
+  onHide: (property: DatabaseProperty) => Promise<boolean>;
+  onInsert: (
+    property: DatabaseProperty,
+    direction: "left" | "right",
+  ) => Promise<DatabaseProperty | null>;
+  onSort: (property: DatabaseProperty, direction: "asc" | "desc") => void;
   onUpdate: (
     propertyId: string,
     changes: Partial<Pick<DatabaseProperty, "config" | "name" | "position" | "type">>,
@@ -928,11 +1113,82 @@ function ColumnHeaderEditor({
           <div className="border-t border-zinc-100 p-1.5">
             <button
               className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm text-zinc-700 hover:bg-zinc-100"
-              onClick={() =>
-                void onUpdate(property.id, {
-                  config: { ...property.config, hidden: true },
-                })
-              }
+              onClick={() => {
+                onFilter(property);
+                setIsOpen(false);
+              }}
+              type="button"
+            >
+              <Filter className="size-4 text-zinc-500" /> Filtrar por esta propiedad
+            </button>
+            <button
+              className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm text-zinc-700 hover:bg-zinc-100"
+              onClick={() => {
+                onSort(property, "asc");
+                setIsOpen(false);
+              }}
+              type="button"
+            >
+              <SortAsc className="size-4 text-zinc-500" /> Ordenar ascendente
+            </button>
+            <button
+              className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm text-zinc-700 hover:bg-zinc-100"
+              onClick={() => {
+                onSort(property, "desc");
+                setIsOpen(false);
+              }}
+              type="button"
+            >
+              <SortDesc className="size-4 text-zinc-500" /> Ordenar descendente
+            </button>
+            <button
+              className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm text-zinc-700 hover:bg-zinc-100"
+              onClick={() => {
+                onGroup(property);
+                setIsOpen(false);
+              }}
+              type="button"
+            >
+              <Group className="size-4 text-zinc-500" /> Agrupar por esta propiedad
+            </button>
+          </div>
+
+          <div className="border-t border-zinc-100 p-1.5">
+            <button
+              className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm text-zinc-700 hover:bg-zinc-100"
+              onClick={async () => {
+                await onInsert(property, "left");
+                setIsOpen(false);
+              }}
+              type="button"
+            >
+              <ArrowUp className="size-4 -rotate-90 text-zinc-500" /> Insertar a la izquierda
+            </button>
+            <button
+              className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm text-zinc-700 hover:bg-zinc-100"
+              onClick={async () => {
+                await onInsert(property, "right");
+                setIsOpen(false);
+              }}
+              type="button"
+            >
+              <ArrowDown className="size-4 -rotate-90 text-zinc-500" /> Insertar a la derecha
+            </button>
+            <button
+              className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm text-zinc-700 hover:bg-zinc-100"
+              onClick={async () => {
+                await onDuplicate(property);
+                setIsOpen(false);
+              }}
+              type="button"
+            >
+              <Copy className="size-4 text-zinc-500" /> Duplicar propiedad
+            </button>
+            <button
+              className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm text-zinc-700 hover:bg-zinc-100"
+              onClick={async () => {
+                if (await onHide(property)) setIsOpen(false);
+              }}
               type="button"
             >
               <EyeOff className="size-4 text-zinc-500" /> Ocultar columna
@@ -1871,6 +2127,142 @@ function NewRowButton({ onCreateRow }: { onCreateRow: () => Promise<WorkspacePag
     <button className="flex h-10 w-full items-center gap-2 border-t px-4 text-sm text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800" onClick={() => void onCreateRow()} type="button">
       <Plus className="size-4" /> Nueva página
     </button>
+  );
+}
+
+function ViewTab({
+  active,
+  isMenuOpen,
+  onDelete,
+  onDuplicate,
+  onEdit,
+  onMenuToggle,
+  onSelect,
+  onUpdate,
+  view,
+}: {
+  active: boolean;
+  isMenuOpen: boolean;
+  onDelete: () => Promise<void>;
+  onDuplicate: () => void;
+  onEdit: () => void;
+  onMenuToggle: () => void;
+  onSelect: () => void;
+  onUpdate: (
+    changes: Partial<Pick<DatabaseView, "name" | "type" | "group_by">>,
+  ) => Promise<boolean>;
+  view: DatabaseView;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    function closeOutside(event: MouseEvent) {
+      const target = event.target as Node;
+      if (!menuRef.current?.contains(target) && !triggerRef.current?.contains(target)) {
+        onMenuToggle();
+      }
+    }
+    window.addEventListener("mousedown", closeOutside);
+    return () => window.removeEventListener("mousedown", closeOutside);
+  }, [isMenuOpen, onMenuToggle]);
+
+  return (
+    <div className="relative flex h-10 items-stretch">
+      <button
+        className={`flex items-center gap-2 border-b-2 pl-3 text-xs font-medium transition-colors ${
+          active
+            ? "border-zinc-900 text-zinc-900"
+            : "border-transparent text-zinc-500 hover:text-zinc-800"
+        } ${active ? "pr-1" : "pr-3"}`}
+        onClick={onSelect}
+        type="button"
+      >
+        <ViewTypeIcon type={view.type} /> {view.name}
+      </button>
+      {active && (
+        <button
+          aria-expanded={isMenuOpen}
+          aria-label={`Opciones de ${view.name}`}
+          className="border-b-2 border-zinc-900 pr-2 text-zinc-400 hover:text-zinc-800"
+          onClick={onMenuToggle}
+          ref={triggerRef}
+          type="button"
+        >
+          <ChevronDown className="size-3.5" />
+        </button>
+      )}
+      {isMenuOpen && (
+        <div
+          className="absolute left-0 top-10 z-40 w-[min(300px,calc(100vw-24px))] rounded-xl border border-zinc-200 bg-white p-2 text-sm font-normal shadow-[0_12px_32px_rgba(0,0,0,0.16)]"
+          ref={menuRef}
+        >
+          <label className="flex h-10 items-center gap-2 rounded-lg bg-zinc-50 px-2 focus-within:ring-2 focus-within:ring-indigo-100">
+            <Pencil className="size-4 text-zinc-400" />
+            <input
+              aria-label="Renombrar vista"
+              className="min-w-0 flex-1 bg-transparent outline-none"
+              defaultValue={view.name}
+              key={view.name}
+              onBlur={(event) => {
+                const name = event.target.value.trim() || "Vista";
+                if (name !== view.name) void onUpdate({ name });
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+              }}
+            />
+          </label>
+
+          <p className="mb-1 mt-3 px-2 text-[11px] font-medium uppercase tracking-wide text-zinc-400">
+            Mostrar como
+          </p>
+          <div className="grid grid-cols-3 gap-1">
+            {DATABASE_VIEW_TYPES.map((type) => (
+              <button
+                className={`flex flex-col items-center gap-1.5 rounded-lg px-2 py-2 text-xs hover:bg-zinc-100 ${
+                  view.type === type.value ? "bg-zinc-100 text-zinc-900" : "text-zinc-600"
+                }`}
+                key={type.value}
+                onClick={() =>
+                  void onUpdate({ group_by: null, type: type.value })
+                }
+                type="button"
+              >
+                <ViewTypeIcon type={type.value} /> {type.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-2 border-t border-zinc-100 pt-1.5">
+            <button
+              className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-zinc-700 hover:bg-zinc-100"
+              onClick={onEdit}
+              type="button"
+            >
+              <SlidersHorizontal className="size-4 text-zinc-500" /> Editar vista
+            </button>
+            <button
+              className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-zinc-700 hover:bg-zinc-100"
+              onClick={onDuplicate}
+              type="button"
+            >
+              <Copy className="size-4 text-zinc-500" /> Duplicar vista
+            </button>
+            <button
+              className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-red-600 hover:bg-red-50"
+              onClick={() => {
+                if (window.confirm(`¿Eliminar la vista “${view.name}”?`)) void onDelete();
+              }}
+              type="button"
+            >
+              <Trash2 className="size-4" /> Eliminar vista
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

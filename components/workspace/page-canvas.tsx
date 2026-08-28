@@ -101,9 +101,9 @@ export function PageCanvas({
         <span className="mb-5 grid size-14 place-items-center rounded-2xl bg-indigo-50 text-indigo-600">
           <FileText className="size-6" />
         </span>
-        <h1 className="text-2xl font-semibold tracking-tight">Crea tu primera página</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Empieza con una página</h1>
         <p className="mt-2 max-w-md text-sm leading-6 text-zinc-500">
-          Las páginas se guardan directamente en tu workspace y pueden contener tantas subpáginas como necesites.
+          Escribe una nota, organiza un proyecto o crea una base de conocimiento.
         </p>
         <Button className="mt-6" onClick={onCreate}>
           <Plus className="size-4" />
@@ -230,7 +230,7 @@ export function PageCanvas({
 
         <input
           aria-label="Título de la página"
-          className="w-full border-none bg-transparent text-3xl font-bold tracking-[-0.04em] text-zinc-900 outline-none placeholder:text-zinc-300 sm:text-5xl"
+          className="w-full border-none bg-transparent text-3xl font-bold tracking-[-0.035em] text-zinc-900 outline-none placeholder:text-zinc-300 sm:text-[40px] sm:leading-[1.2]"
           onBlur={saveTitle}
           onChange={(event) => setTitle(event.target.value)}
           onKeyDown={(event) => {
@@ -389,10 +389,10 @@ export function SettingsView({
         </div>
       </div>
       <dl className="mt-10 divide-y rounded-xl border bg-white px-5">
-        <SettingRow label="Workspace" value={`${workspace.icon || "✨"} ${workspace.name}`} />
+        <SettingRow label="Espacio" value={`${workspace.icon || "✨"} ${workspace.name}`} />
         <SettingRow label="Cuenta" value={email} />
         <SettingRow label="Rol" value={workspace.role} />
-        <SettingRow label="Persistencia" value="Supabase conectado" />
+        <SettingRow label="Estado" value="Todo sincronizado" />
       </dl>
     </div>
   );

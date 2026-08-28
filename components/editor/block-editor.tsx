@@ -62,8 +62,8 @@ export function BlockEditor({
         ...es,
         placeholders: {
           ...es.placeholders,
-          default: "Escribe '/' para insertar un bloque",
-          emptyDocument: "Escribe '/' para empezar",
+          default: "Escribe '/' para ver los comandos",
+          emptyDocument: "Escribe '/' para ver los comandos",
         },
       },
       extensions: [syntaxHighlighter],
@@ -121,8 +121,8 @@ export function BlockEditor({
       {
         ...phaseTwoSlashItems.callout,
         aliases: ["aviso", "nota", "callout"],
-        group: "Workspace",
-        subtext: "Destaca una idea o advertencia",
+        group: "Más bloques",
+        subtext: "Destaca información importante",
         onItemClick: () =>
           insertOrUpdateBlockForSlashMenu(editorInstance, {
             type: "callout",
@@ -132,7 +132,7 @@ export function BlockEditor({
       {
         ...phaseTwoSlashItems.columns,
         aliases: ["columnas", "dos columnas", "columns"],
-        group: "Workspace",
+        group: "Más bloques",
         subtext: "Organiza texto en paralelo",
         onItemClick: () =>
           insertOrUpdateBlockForSlashMenu(editorInstance, {
@@ -142,7 +142,7 @@ export function BlockEditor({
       {
         ...phaseTwoSlashItems.subpage,
         aliases: ["subpagina", "página", "page"],
-        group: "Workspace",
+        group: "Más bloques",
         subtext: "Crea una página dentro de esta página",
         onItemClick: () => {
           const currentBlock = editorInstance.getTextCursorPosition().block;
@@ -180,7 +180,7 @@ export function BlockEditor({
         .map((candidate) => ({
           icon: <span className="text-sm">{candidate.icon || "📄"}</span>,
           title: candidate.title,
-          subtext: "Página del workspace",
+          subtext: "Página de tu espacio",
           onItemClick: () => {
             editorInstance.insertInlineContent([
               {

@@ -1,6 +1,6 @@
 export default function WorkspaceLoading() {
   return (
-    <main aria-label="Cargando workspace" className="flex h-screen bg-white" id="main-content">
+    <main aria-label="Cargando espacio" className="flex h-screen bg-white" id="main-content">
       <aside className="hidden w-72 shrink-0 border-r bg-zinc-50 p-4 sm:block">
         <div className="h-9 animate-pulse rounded-lg bg-zinc-200" />
         <div className="mt-8 space-y-2">

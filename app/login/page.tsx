@@ -16,13 +16,13 @@ export default function LoginPage() {
           <span className="grid size-8 place-items-center rounded-lg bg-indigo-600 text-white">
             <Layers3 aria-hidden="true" className="size-4" />
           </span>
-          Workspace
+          Mi espacio
         </Link>
         <Card>
           <CardHeader>
-            <CardTitle>Qué bueno verte</CardTitle>
+            <CardTitle>Inicia sesión</CardTitle>
             <CardDescription>
-              Entra con tu contraseña o recibe un enlace mágico por correo.
+              Continúa donde lo dejaste.
             </CardDescription>
           </CardHeader>
           <CardContent>

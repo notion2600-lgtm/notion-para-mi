@@ -219,7 +219,7 @@ export function DatabaseCanvas({
       <div className="mb-2 text-5xl">{database.icon || "📊"}</div>
       <input
         aria-label="Título de la base de datos"
-        className="w-full border-none bg-transparent text-3xl font-bold tracking-[-0.04em] outline-none placeholder:text-zinc-300 sm:text-5xl"
+        className="w-full border-none bg-transparent text-3xl font-bold tracking-[-0.035em] outline-none placeholder:text-zinc-300 sm:text-[40px] sm:leading-[1.2]"
         onBlur={saveTitle}
         onChange={(event) => setTitle(event.target.value)}
         onKeyDown={(event) => {
@@ -233,7 +233,7 @@ export function DatabaseCanvas({
           <button
             className={`flex h-10 items-center gap-2 border-b-2 px-3 text-xs font-medium transition-colors ${
               activeView?.id === view.id
-                ? "border-indigo-500 text-zinc-900"
+                ? "border-zinc-900 text-zinc-900"
                 : "border-transparent text-zinc-500 hover:text-zinc-800"
             }`}
             key={view.id}
@@ -455,8 +455,8 @@ function TableView({
 }: ViewSurfaceProps) {
   const groups = groupRows(rows, view.group_by, properties, currentUser, pages);
   return (
-    <div className="mt-3 overflow-x-auto rounded-xl border bg-white">
-      <table className="w-max min-w-full border-collapse text-sm">
+    <div className="mt-3 overflow-x-auto rounded-md border bg-white">
+      <table className="w-max min-w-full border-collapse text-sm font-normal">
         <colgroup>
           <col style={{ width: 42 }} />
           <col style={{ width: titleWidth }} />
@@ -842,7 +842,7 @@ function ColumnHeaderEditor({
             </label>
 
             <label className="mt-2 block px-2 py-1 text-xs font-medium text-zinc-500">
-              Tipo de propiedad
+              Tipo
               <select
                 className="mt-1.5 h-9 w-full rounded-lg border border-zinc-200 bg-white px-2 text-sm font-normal text-zinc-800 outline-none focus:ring-2 focus:ring-indigo-100"
                 onChange={(event) => {
@@ -1098,9 +1098,6 @@ function AddColumnButton({
                 </button>
               ))}
             </div>
-            <p className="mt-2 border-t border-zinc-100 px-2 pb-1 pt-2 text-[11px] text-zinc-400">
-              Escribe un nombre y elige el tipo para crear la columna.
-            </p>
           </div>
         </div>
       )}
@@ -1872,7 +1869,7 @@ function EmptyRows({ rows }: { rows: WorkspacePage[] }) {
 function NewRowButton({ onCreateRow }: { onCreateRow: () => Promise<WorkspacePage | null> }) {
   return (
     <button className="flex h-10 w-full items-center gap-2 border-t px-4 text-sm text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800" onClick={() => void onCreateRow()} type="button">
-      <Plus className="size-4" /> Nueva fila
+      <Plus className="size-4" /> Nueva página
     </button>
   );
 }

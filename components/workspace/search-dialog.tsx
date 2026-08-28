@@ -62,7 +62,7 @@ export function SearchDialog({
       <section
         aria-label="Búsqueda global"
         aria-modal="true"
-        className="w-full max-w-2xl overflow-hidden rounded-2xl border bg-white shadow-2xl"
+        className="w-full max-w-2xl overflow-hidden rounded-xl border bg-white shadow-2xl"
         role="dialog"
       >
         <div className="flex h-14 items-center gap-3 border-b px-4">
@@ -86,7 +86,7 @@ export function SearchDialog({
               }
               if (event.key === "Escape") onClose();
             }}
-            placeholder="Busca en títulos y contenido…"
+            placeholder="Buscar en tu espacio…"
             value={query}
           />
           <button
@@ -100,14 +100,14 @@ export function SearchDialog({
         </div>
         <div className="max-h-[58vh] overflow-y-auto p-2">
           <p className="px-2 pb-2 pt-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-            {debouncedQuery ? "Resultados" : "Ir rápido a una página"}
+            {debouncedQuery ? "Resultados" : "Páginas recientes"}
           </p>
           {search.isFetching && debouncedQuery && (
             <p className="px-3 py-5 text-sm text-zinc-400">Buscando…</p>
           )}
           {!search.isFetching && results.length === 0 && (
             <p className="px-3 py-10 text-center text-sm text-zinc-500">
-              No encontramos contenido con esas palabras.
+              No hay resultados para esta búsqueda.
             </p>
           )}
           {results.map((page, index) => {
@@ -117,8 +117,8 @@ export function SearchDialog({
               .join(" / ");
             return (
               <button
-                className={`flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left ${
-                  index === activeIndex ? "bg-indigo-50" : "hover:bg-zinc-50"
+                className={`flex w-full items-start gap-3 rounded-md px-3 py-3 text-left ${
+                  index === activeIndex ? "bg-zinc-100" : "hover:bg-zinc-50"
                 }`}
                 key={page.id}
                 onClick={() => choose(page.id)}
@@ -137,7 +137,7 @@ export function SearchDialog({
                     </span>
                   )}
                 </span>
-                {index === activeIndex && <CornerDownLeft className="mt-2 size-3.5 text-indigo-500" />}
+                {index === activeIndex && <CornerDownLeft className="mt-2 size-3.5 text-zinc-500" />}
               </button>
             );
           })}

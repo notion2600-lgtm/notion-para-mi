@@ -41,7 +41,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           },
         });
         if (signUpError) throw signUpError;
-        setMessage("Revisa tu correo para confirmar la cuenta.");
+        setMessage("Revisa tu correo y confirma tu cuenta para continuar.");
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
@@ -69,7 +69,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
       });
       if (otpError) throw otpError;
-      setMessage("Te enviamos un enlace mágico. Revisa tu correo.");
+      setMessage("Listo. Revisa tu correo para entrar sin contraseña.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No se pudo enviar el enlace.");
     } finally {
@@ -142,7 +142,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           variant="outline"
         >
           <Mail aria-hidden="true" className="size-4" />
-          Enviarme un enlace mágico
+          Continuar con un enlace por correo
         </Button>
       )}
       <p className="text-center text-sm text-zinc-500">

@@ -42,7 +42,7 @@ export function TemplatesView({
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Plantillas</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Crea páginas completas y reutiliza estructuras guardadas por tu workspace.
+            Empieza rápido con una estructura lista para editar.
           </p>
         </div>
       </div>
@@ -55,7 +55,7 @@ export function TemplatesView({
           <h2 className="text-sm font-semibold">Importar desde Notion</h2>
           <p className="mt-1 text-xs leading-5 text-zinc-500" id="notion-import-help">
             Selecciona una exportación ZIP con Markdown y CSV, o un archivo individual .md o .csv.
-            Se convertirá en una plantilla editable de este workspace.
+            La importación se convertirá en páginas y bases de datos editables.
           </p>
         </div>
         <input
@@ -92,7 +92,7 @@ export function TemplatesView({
                 <div className="min-w-0 flex-1">
                   <h2 className="truncate text-base font-semibold">{template.name}</h2>
                   <span className="mt-1 inline-block rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-500">
-                    {template.is_builtin ? "Incluida" : "Tu workspace"}
+                    {template.is_builtin ? "Incluida" : "Personal"}
                   </span>
                 </div>
               </div>

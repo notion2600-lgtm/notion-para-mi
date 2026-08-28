@@ -17,21 +17,21 @@ const appUrl = configuredAppUrl
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
   title: {
-    default: "Workspace",
-    template: "%s · Workspace",
+    default: "Mi espacio",
+    template: "%s · Mi espacio",
   },
   description: "Un espacio privado para organizar páginas, proyectos y conocimiento.",
   openGraph: {
     description: "Organiza páginas, proyectos y conocimiento",
-    images: [{ alt: "Workspace", height: 900, url: "/og.png", width: 1600 }],
-    title: "Workspace",
+    images: [{ alt: "Mi espacio", height: 900, url: "/og.png", width: 1600 }],
+    title: "Mi espacio",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
     description: "Organiza páginas, proyectos y conocimiento",
     images: ["/og.png"],
-    title: "Workspace",
+    title: "Mi espacio",
   },
 };
 

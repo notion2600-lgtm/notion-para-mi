@@ -7,7 +7,7 @@ import { WorkspaceShell } from "@/components/workspace/workspace-shell";
 import { getServerSupabase } from "@/lib/supabase/server";
 import type { WorkspacePage, WorkspaceSummary } from "@/lib/types";
 
-export const metadata: Metadata = { title: "Workspace" };
+export const metadata: Metadata = { title: "Mi espacio" };
 
 export default async function WorkspacePage({
   searchParams,
@@ -51,7 +51,7 @@ export default async function WorkspacePage({
       <main className="grid min-h-screen place-items-center bg-zinc-50 px-5">
         <Card className="max-w-lg border-red-200">
           <CardHeader>
-            <CardTitle>No encontramos tu workspace</CardTitle>
+            <CardTitle>No encontramos tu espacio</CardTitle>
             <CardDescription>
               {membershipError?.message ?? "La membresía inicial no está disponible."}
             </CardDescription>

@@ -31,7 +31,7 @@ export function PublicPageRenderer({
       <header className="border-b px-5 py-3 sm:px-8">
         <div className="mx-auto flex max-w-[1000px] items-center gap-2 text-sm font-semibold">
           <span className="grid size-7 place-items-center rounded-md bg-indigo-600 text-white">W</span>
-          Workspace
+          Mi espacio
           <span className="ml-auto rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
             Página pública
           </span>

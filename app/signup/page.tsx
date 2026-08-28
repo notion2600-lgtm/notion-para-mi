@@ -16,13 +16,13 @@ export default function SignupPage() {
           <span className="grid size-8 place-items-center rounded-lg bg-indigo-600 text-white">
             <Layers3 aria-hidden="true" className="size-4" />
           </span>
-          Workspace
+          Mi espacio
         </Link>
         <Card>
           <CardHeader>
-            <CardTitle>Crea tu workspace</CardTitle>
+            <CardTitle>Crea tu espacio</CardTitle>
             <CardDescription>
-              Al confirmar tu correo crearemos tu perfil y espacio privado automáticamente.
+              Un lugar privado para tus notas, proyectos e ideas.
             </CardDescription>
           </CardHeader>
           <CardContent>

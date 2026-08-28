@@ -17,11 +17,11 @@ export default async function HomePage() {
           <span className="grid size-8 place-items-center rounded-lg bg-indigo-600 text-white">
             <Layers3 aria-hidden="true" className="size-4" />
           </span>
-          Workspace
+          Mi espacio
         </Link>
         <Button asChild variant="ghost">
           <Link href={data.user ? "/workspace" : "/login"}>
-            {data.user ? "Abrir workspace" : "Iniciar sesión"}
+            {data.user ? "Abrir mi espacio" : "Iniciar sesión"}
           </Link>
         </Button>
       </nav>
@@ -35,13 +35,13 @@ export default async function HomePage() {
           Un espacio tranquilo para pensar y crear.
         </h1>
         <p className="mt-7 max-w-2xl text-pretty text-lg leading-8 text-zinc-600">
-          Organiza páginas, proyectos y conocimiento de tu agencia en un
-          workspace privado construido sobre Supabase.
+          Escribe, planifica y organiza tus proyectos en un solo lugar.
+          Todo permanece privado hasta que decidas compartirlo.
         </p>
         <div className="mt-9 flex flex-col gap-3 sm:flex-row">
           <Button asChild size="lg">
             <Link href={data.user ? "/workspace" : "/signup"}>
-              {data.user ? "Continuar al workspace" : "Crear mi workspace"}
+              {data.user ? "Continuar" : "Crear mi espacio"}
               <ArrowRight aria-hidden="true" className="size-4" />
             </Link>
           </Button>
@@ -53,7 +53,7 @@ export default async function HomePage() {
         </div>
         <p className="mt-6 flex items-center gap-2 text-sm text-zinc-500">
           <ShieldCheck aria-hidden="true" className="size-4" />
-          Autenticación y datos protegidos por políticas RLS.
+          Tus páginas y archivos son privados por defecto.
         </p>
       </section>
     </main>

@@ -2223,7 +2223,14 @@ function ViewTab({
   }, [isMenuOpen, onMenuToggle]);
 
   return (
-    <div className="group relative flex h-10 items-stretch">
+    <div
+      className="group relative flex h-10 items-stretch"
+      onContextMenu={(event) => {
+        event.preventDefault();
+        if (!isMenuOpen) onMenuToggle();
+      }}
+      title="Clic derecho para ver las opciones de la vista"
+    >
       <button
         className={`flex items-center gap-2 border-b-2 pl-3 text-xs font-medium transition-colors ${
           active

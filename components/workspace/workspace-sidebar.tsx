@@ -18,6 +18,7 @@ import {
   LayoutTemplate,
   LogOut,
   MoreHorizontal,
+  PanelLeftClose,
   Pencil,
   Plus,
   Search,
@@ -25,6 +26,7 @@ import {
   Star,
   Table2,
   Trash2,
+  UserPlus,
 } from "lucide-react";
 import { PointerEvent as ReactPointerEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -48,6 +50,7 @@ export function WorkspaceSidebar({
   mobile = false,
   onArchive,
   onCreate,
+  onCreateWorkspace,
   onDuplicate,
   onMove,
   onSelect,
@@ -61,6 +64,7 @@ export function WorkspaceSidebar({
   mobile?: boolean;
   onArchive: (pageId: string) => void;
   onCreate: (parentPageId: string | null) => Promise<WorkspacePage | null>;
+  onCreateWorkspace: (name: string) => Promise<boolean>;
   onDuplicate: (pageId: string) => Promise<WorkspacePage | null>;
   onMove: (pageId: string, parentPageId: string | null, position: number) => void;
   onSelect: (pageId: string) => void;
@@ -76,6 +80,7 @@ export function WorkspaceSidebar({
     setExpanded,
     setSearchOpen,
     setSidebarWidth,
+    setSidebarVisible,
     setView,
     sidebarWidth,
   } = useWorkspaceUi();
@@ -157,35 +162,66 @@ export function WorkspaceSidebar({
       className="print-hidden relative flex h-screen shrink-0 flex-col border-r bg-[#f7f7f5] text-zinc-700"
       style={{ width: mobile ? "min(88vw, 320px)" : sidebarWidth }}
     >
-      <div className="flex h-14 items-center gap-2 px-3">
+      <div className="flex h-11 items-center gap-1 px-2 pt-1">
         <div className="relative min-w-0 flex-1">
           <button
             aria-expanded={workspaceMenuOpen}
-            className="flex h-11 w-full min-w-0 items-center gap-2 rounded-lg px-1.5 text-left hover:bg-zinc-200/70"
+            className={`flex h-9 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left ${workspaceMenuOpen ? "bg-zinc-200/80" : "hover:bg-zinc-200/70"}`}
             onClick={(event) => {
               event.stopPropagation();
               setWorkspaceMenuOpen((open) => !open);
             }}
             type="button"
           >
-            <span className="grid size-8 shrink-0 place-items-center rounded-md bg-white text-base shadow-sm">
+            <span className="grid size-6 shrink-0 place-items-center rounded-md bg-white text-sm shadow-sm">
               {workspace.icon || "✨"}
             </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-semibold text-zinc-900">{workspace.name}</span>
-              <span className="block truncate text-[11px] text-zinc-500">{email}</span>
-            </span>
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-800">{workspace.name}</span>
             <ChevronDown className="size-3.5 shrink-0 text-zinc-400" />
           </button>
           {workspaceMenuOpen && (
             <div
-              className="absolute left-0 top-12 z-50 w-[min(280px,calc(100vw-24px))] rounded-xl border bg-white p-1.5 shadow-xl"
+              className="absolute left-0 top-10 z-50 max-h-[calc(100vh-56px)] w-[min(300px,calc(100vw-16px))] overflow-y-auto rounded-xl border bg-white shadow-[0_12px_32px_rgba(0,0,0,0.16)]"
               onClick={(event) => event.stopPropagation()}
             >
-              <p className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wide text-zinc-400">Tus espacios</p>
+              <div className="flex items-center gap-3 px-3 py-3">
+                <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-amber-900 text-xl text-white">
+                  {workspace.icon || "✨"}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-zinc-900">{workspace.name}</p>
+                  <p className="text-xs text-zinc-500">Plan gratuito · {roleLabel(workspace.role)}</p>
+                </div>
+              </div>
+              <div className="border-t p-1.5">
+                <button
+                  className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm hover:bg-zinc-100"
+                  onClick={() => {
+                    setWorkspaceMenuOpen(false);
+                    setView("settings");
+                  }}
+                  type="button"
+                >
+                  <Settings className="size-4 text-zinc-500" /> Configuración
+                </button>
+                {workspace.role === "owner" && <button
+                  className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm hover:bg-zinc-100"
+                  onClick={() => {
+                    setWorkspaceMenuOpen(false);
+                    setView("settings");
+                  }}
+                  type="button"
+                >
+                  <UserPlus className="size-4 text-zinc-500" /> Invitar a miembros
+                </button>}
+              </div>
+              <div className="border-t px-3 py-2">
+                <p className="truncate text-xs text-zinc-500">{email}</p>
+              </div>
+              <div className="p-1.5 pt-0">
               {workspaces.map((item) => (
                 <button
-                  className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-zinc-100 ${item.id === workspace.id ? "bg-zinc-100" : ""}`}
+                  className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-zinc-100 ${item.id === workspace.id ? "bg-zinc-50" : ""}`}
                   key={item.id}
                   onClick={() => {
                     setWorkspaceMenuOpen(false);
@@ -201,20 +237,38 @@ export function WorkspaceSidebar({
                   {item.id === workspace.id && <span className="text-xs text-indigo-600">✓</span>}
                 </button>
               ))}
+                <button
+                  className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm text-blue-600 hover:bg-blue-50"
+                  onClick={async () => {
+                    const name = window.prompt("Nombre del nuevo espacio", "Nuevo espacio de trabajo");
+                    if (!name?.trim()) return;
+                    setWorkspaceMenuOpen(false);
+                    await onCreateWorkspace(name);
+                  }}
+                  type="button"
+                >
+                  <Plus className="size-4" /> Nuevo espacio de trabajo
+                </button>
+              </div>
+              <form action="/auth/signout" className="border-t p-1.5" method="post">
+                <button className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm hover:bg-zinc-100" type="submit">
+                  <LogOut className="size-4 text-zinc-500" /> Cerrar sesión
+                </button>
+              </form>
             </div>
           )}
         </div>
-        {workspace.role !== "viewer" && <button
-          aria-label="Crear página"
+        <button
+          aria-label="Ocultar menú lateral"
           className="grid size-8 place-items-center rounded-md hover:bg-zinc-200"
-          onClick={() => addPage(null)}
+          onClick={() => setSidebarVisible(false)}
           type="button"
         >
-          <FilePlus2 className="size-4" />
-        </button>}
+          <PanelLeftClose className="size-4 text-zinc-400" />
+        </button>
       </div>
 
-      <div className="px-2 pb-2">
+      <div className="px-2 pb-3 pt-1">
         <button
           className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm hover:bg-zinc-200/80"
           onClick={() => setSearchOpen(true)}
@@ -254,10 +308,11 @@ export function WorkspaceSidebar({
               <Plus className="size-3.5" />
             </button>
           ) : undefined}
-          label="Páginas"
+          label="Espacio de equipo"
           onToggle={() => setPrivateOpen(!privateOpen)}
           open={privateOpen}
         >
+          <>
           {privateOpen && tree.length > 0 ? (
             <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd} sensors={sensors}>
               <SortableContext items={tree.map((page) => page.id)} strategy={verticalListSortingStrategy}>
@@ -287,6 +342,16 @@ export function WorkspaceSidebar({
               Crear la primera página
             </button>
           ) : null}
+          {privateOpen && tree.length > 0 && workspace.role !== "viewer" && (
+            <button
+              className="mx-2 mt-1 flex h-8 w-[calc(100%-1rem)] items-center gap-2 rounded-md px-2 text-left text-sm text-zinc-400 hover:bg-zinc-200/80 hover:text-zinc-700"
+              onClick={() => void addPage(null)}
+              type="button"
+            >
+              <Plus className="size-4" /> Añadir nueva
+            </button>
+          )}
+          </>
         </SidebarSection>
       </div>
 
@@ -318,12 +383,15 @@ export function WorkspaceSidebar({
           <Settings className="size-4 text-zinc-500" />
           Personas y equipo
         </button>
-        <form action="/auth/signout" method="post">
-          <button className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm hover:bg-zinc-200/80" type="submit">
-            <LogOut className="size-4 text-zinc-500" />
-            Salir
+        {workspace.role !== "viewer" && (
+          <button
+            className="mt-2 flex h-9 w-full items-center justify-center gap-2 rounded-lg border bg-white text-sm font-medium shadow-sm hover:bg-zinc-50"
+            onClick={() => void addPage(null)}
+            type="button"
+          >
+            <FilePlus2 className="size-4 text-zinc-500" /> Nueva página
           </button>
-        </form>
+        )}
       </div>
 
       {!mobile && (

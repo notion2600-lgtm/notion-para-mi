@@ -18,6 +18,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { DatabaseCanvas } from "@/components/database/database-canvas";
@@ -40,6 +41,7 @@ import {
 import { downloadPageAsMarkdown } from "@/lib/export-page";
 import { getBacklinks } from "@/lib/page-links";
 import { getDescendantIds, getPagePath } from "@/lib/page-tree";
+import { createClient } from "@/lib/supabase/client";
 import type { WorkspacePage, WorkspaceSummary } from "@/lib/types";
 import { useWorkspaceUi } from "@/stores/workspace-ui";
 
@@ -59,6 +61,7 @@ export function WorkspaceShell({
   workspaces: WorkspaceSummary[];
 }) {
   const router = useRouter();
+  const supabase = useMemo(() => createClient(), []);
   const { resolvedTheme, setTheme, theme } = useTheme();
   const {
     archivePage,
@@ -200,6 +203,35 @@ export function WorkspaceShell({
     setNewMenuOpen(false);
   }
 
+  async function createWorkspace(name: string) {
+    const workspaceId = crypto.randomUUID();
+    const normalizedName = name.trim() || "Nuevo espacio";
+    const { error: workspaceError } = await supabase.from("workspaces").insert({
+      icon: "✨",
+      id: workspaceId,
+      name: normalizedName,
+      owner_id: userId,
+    });
+    if (workspaceError) {
+      toast.error("No se pudo crear el espacio", { description: workspaceError.message });
+      return false;
+    }
+    const { error: memberError } = await supabase.from("workspace_members").insert({
+      role: "owner",
+      user_id: userId,
+      workspace_id: workspaceId,
+    });
+    if (memberError) {
+      await supabase.from("workspaces").delete().eq("id", workspaceId);
+      toast.error("No se pudo completar el espacio", { description: memberError.message });
+      return false;
+    }
+    toast.success("Espacio de trabajo creado");
+    router.push(`/workspace?workspace=${workspaceId}`);
+    router.refresh();
+    return true;
+  }
+
   async function duplicateAndSelect(pageId: string) {
     const copy = await duplicatePage(pageId);
     if (copy) selectPage(copy.id);
@@ -242,6 +274,7 @@ export function WorkspaceShell({
             mobile={isMobile}
             onArchive={archive}
             onCreate={createAndSelect}
+            onCreateWorkspace={createWorkspace}
             onDuplicate={duplicatePage}
             onMove={(pageId, parentPageId, position) =>
               updatePage(pageId, { parent_page_id: parentPageId, position })

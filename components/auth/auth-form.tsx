@@ -22,6 +22,11 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const configured = hasSupabaseEnv();
+  const next = searchParams.get("next") || "/workspace";
+  const callbackUrl =
+    typeof window === "undefined"
+      ? "/auth/callback"
+      : `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
 
   async function submitPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -37,7 +42,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           password,
           options: {
             data: { full_name: fullName.trim() || null },
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            emailRedirectTo: callbackUrl,
           },
         });
         if (signUpError) throw signUpError;
@@ -48,7 +53,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           password,
         });
         if (signInError) throw signInError;
-        window.location.assign(searchParams.get("next") || "/workspace");
+        window.location.assign(next);
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No se pudo completar la solicitud.");
@@ -66,7 +71,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
       if (!email) throw new Error("Escribe tu correo primero.");
       const { error: otpError } = await createClient().auth.signInWithOtp({
         email,
-        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+        options: { emailRedirectTo: callbackUrl },
       });
       if (otpError) throw otpError;
       setMessage("Listo. Revisa tu correo para entrar sin contraseña.");
@@ -149,7 +154,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         {mode === "signup" ? "¿Ya tienes cuenta?" : "¿No tienes cuenta?"}{" "}
         <Link
           className="font-medium text-indigo-600 hover:text-indigo-700 hover:underline"
-          href={mode === "signup" ? "/login" : "/signup"}
+          href={`${mode === "signup" ? "/login" : "/signup"}?next=${encodeURIComponent(next)}`}
         >
           {mode === "signup" ? "Inicia sesión" : "Regístrate"}
         </Link>

@@ -51,9 +51,11 @@ export function WorkspaceSidebar({
   onDuplicate,
   onMove,
   onSelect,
+  onSwitchWorkspace,
   onUpdate,
   pages,
   workspace,
+  workspaces,
 }: {
   email: string;
   mobile?: boolean;
@@ -62,9 +64,11 @@ export function WorkspaceSidebar({
   onDuplicate: (pageId: string) => Promise<WorkspacePage | null>;
   onMove: (pageId: string, parentPageId: string | null, position: number) => void;
   onSelect: (pageId: string) => void;
+  onSwitchWorkspace: (workspaceId: string) => void;
   onUpdate: (pageId: string, changes: Partial<WorkspacePage>) => void;
   pages: WorkspacePage[];
   workspace: WorkspaceSummary;
+  workspaces: WorkspaceSummary[];
 }) {
   const {
     expanded,
@@ -78,6 +82,7 @@ export function WorkspaceSidebar({
   const [favoritesOpen, setFavoritesOpen] = useState(true);
   const [privateOpen, setPrivateOpen] = useState(true);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
+  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
@@ -91,6 +96,7 @@ export function WorkspaceSidebar({
   useEffect(() => {
     function closeMenu() {
       setContextMenu(null);
+      setWorkspaceMenuOpen(false);
     }
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key === "Escape") closeMenu();
@@ -152,21 +158,60 @@ export function WorkspaceSidebar({
       style={{ width: mobile ? "min(88vw, 320px)" : sidebarWidth }}
     >
       <div className="flex h-14 items-center gap-2 px-3">
-        <span className="grid size-8 shrink-0 place-items-center rounded-md bg-white text-base shadow-sm">
-          {workspace.icon || "✨"}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-zinc-900">{workspace.name}</p>
-          <p className="truncate text-[11px] text-zinc-500">{email}</p>
+        <div className="relative min-w-0 flex-1">
+          <button
+            aria-expanded={workspaceMenuOpen}
+            className="flex h-11 w-full min-w-0 items-center gap-2 rounded-lg px-1.5 text-left hover:bg-zinc-200/70"
+            onClick={(event) => {
+              event.stopPropagation();
+              setWorkspaceMenuOpen((open) => !open);
+            }}
+            type="button"
+          >
+            <span className="grid size-8 shrink-0 place-items-center rounded-md bg-white text-base shadow-sm">
+              {workspace.icon || "✨"}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold text-zinc-900">{workspace.name}</span>
+              <span className="block truncate text-[11px] text-zinc-500">{email}</span>
+            </span>
+            <ChevronDown className="size-3.5 shrink-0 text-zinc-400" />
+          </button>
+          {workspaceMenuOpen && (
+            <div
+              className="absolute left-0 top-12 z-50 w-[min(280px,calc(100vw-24px))] rounded-xl border bg-white p-1.5 shadow-xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <p className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wide text-zinc-400">Tus espacios</p>
+              {workspaces.map((item) => (
+                <button
+                  className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-zinc-100 ${item.id === workspace.id ? "bg-zinc-100" : ""}`}
+                  key={item.id}
+                  onClick={() => {
+                    setWorkspaceMenuOpen(false);
+                    if (item.id !== workspace.id) onSwitchWorkspace(item.id);
+                  }}
+                  type="button"
+                >
+                  <span className="grid size-8 place-items-center rounded-md bg-zinc-50 text-base">{item.icon || "✨"}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-zinc-800">{item.name}</span>
+                    <span className="block text-[11px] text-zinc-400">{roleLabel(item.role)}</span>
+                  </span>
+                  {item.id === workspace.id && <span className="text-xs text-indigo-600">✓</span>}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-        <button
+        {workspace.role !== "viewer" && <button
           aria-label="Crear página"
           className="grid size-8 place-items-center rounded-md hover:bg-zinc-200"
           onClick={() => addPage(null)}
           type="button"
         >
           <FilePlus2 className="size-4" />
-        </button>
+        </button>}
       </div>
 
       <div className="px-2 pb-2">
@@ -199,17 +244,17 @@ export function WorkspaceSidebar({
         )}
 
         <SidebarSection
-          action={
+          action={workspace.role !== "viewer" ? (
             <button
-              aria-label="Crear página privada"
+              aria-label="Crear página"
               className="grid size-6 place-items-center rounded opacity-0 hover:bg-zinc-200 group-hover/section:opacity-100"
               onClick={() => addPage(null)}
               type="button"
             >
               <Plus className="size-3.5" />
             </button>
-          }
-          label="Privado"
+          ) : undefined}
+          label="Páginas"
           onToggle={() => setPrivateOpen(!privateOpen)}
           open={privateOpen}
         >
@@ -221,7 +266,9 @@ export function WorkspaceSidebar({
                     expanded={Boolean(expanded[page.id])}
                     key={page.id}
                     onAddChild={addPage}
-                    onMenu={(pageId, x, y) => setContextMenu({ pageId, x, y })}
+                    onMenu={(pageId, x, y) => {
+                      if (workspace.role !== "viewer") setContextMenu({ pageId, x, y });
+                    }}
                     onSelect={onSelect}
                     onToggle={(pageId) => setExpanded(pageId, !expanded[pageId])}
                     page={page}
@@ -230,7 +277,7 @@ export function WorkspaceSidebar({
                 ))}
               </SortableContext>
             </DndContext>
-          ) : privateOpen ? (
+          ) : privateOpen && workspace.role !== "viewer" ? (
             <button
               className="mx-2 flex w-[calc(100%-1rem)] items-center gap-2 rounded-md border border-dashed px-3 py-2 text-left text-xs text-zinc-500 hover:border-zinc-400 hover:bg-white"
               onClick={() => addPage(null)}
@@ -269,7 +316,7 @@ export function WorkspaceSidebar({
           type="button"
         >
           <Settings className="size-4 text-zinc-500" />
-          Ajustes
+          Personas y equipo
         </button>
         <form action="/auth/signout" method="post">
           <button className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-sm hover:bg-zinc-200/80" type="submit">
@@ -325,7 +372,9 @@ export function WorkspaceSidebar({
             icon={FileText}
             label="Copiar enlace"
             onClick={async () => {
-              await navigator.clipboard.writeText(`${window.location.origin}/workspace?page=${contextPage.id}`);
+              await navigator.clipboard.writeText(
+                `${window.location.origin}/workspace?workspace=${workspace.id}&page=${contextPage.id}`,
+              );
               toast.success("Enlace copiado");
               setContextMenu(null);
             }}
@@ -433,4 +482,10 @@ function MenuButton({
       {label}
     </button>
   );
+}
+
+function roleLabel(role: WorkspaceSummary["role"]) {
+  if (role === "owner") return "Propietario";
+  if (role === "editor") return "Puede editar";
+  return "Solo lectura";
 }

@@ -24,15 +24,19 @@ import { DatabaseCanvas } from "@/components/database/database-canvas";
 import {
   FavoriteButton,
   PageCanvas,
-  SettingsView,
   TrashView,
 } from "@/components/workspace/page-canvas";
 import { WorkspaceSidebar } from "@/components/workspace/workspace-sidebar";
 import { SearchDialog } from "@/components/workspace/search-dialog";
 import { ShareButton } from "@/components/workspace/share-button";
+import { TeamSettings } from "@/components/workspace/team-settings";
 import { TemplatesView } from "@/components/workspace/templates-view";
 import { usePageTemplates } from "@/hooks/use-page-templates";
 import { usePages } from "@/hooks/use-pages";
+import {
+  useWorkspacePresence,
+  type OnlineCollaborator,
+} from "@/hooks/use-workspace-presence";
 import { downloadPageAsMarkdown } from "@/lib/export-page";
 import { getBacklinks } from "@/lib/page-links";
 import { getDescendantIds, getPagePath } from "@/lib/page-tree";
@@ -45,12 +49,14 @@ export function WorkspaceShell({
   initialSelectedPageId,
   userId,
   workspace,
+  workspaces,
 }: {
   email: string;
   initialPages: WorkspacePage[];
   initialSelectedPageId: string | null;
   userId: string;
   workspace: WorkspaceSummary;
+  workspaces: WorkspaceSummary[];
 }) {
   const router = useRouter();
   const { resolvedTheme, setTheme, theme } = useTheme();
@@ -80,6 +86,11 @@ export function WorkspaceShell({
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const online = useWorkspacePresence({
+    label: email,
+    userId,
+    workspaceId: workspace.id,
+  });
   const {
     searchOpen,
     selectedPageId,
@@ -112,9 +123,9 @@ export function WorkspaceShell({
   const selectPage = useCallback((pageId: string) => {
     setSearchOpen(false);
     setSelectedPageId(pageId);
-    router.replace(`/workspace?page=${pageId}`, { scroll: false });
+    router.replace(`/workspace?workspace=${workspace.id}&page=${pageId}`, { scroll: false });
     if (isMobile) setSidebarVisible(false);
-  }, [isMobile, router, setSearchOpen, setSelectedPageId, setSidebarVisible]);
+  }, [isMobile, router, setSearchOpen, setSelectedPageId, setSidebarVisible, workspace.id]);
 
   const createAndSelect = useCallback(async (parentPageId: string | null) => {
     const page = await createPage(parentPageId);
@@ -209,7 +220,7 @@ export function WorkspaceShell({
       if (next) selectPage(next.id);
       else {
         setSelectedPageId(null);
-        router.replace("/workspace", { scroll: false });
+        router.replace(`/workspace?workspace=${workspace.id}`, { scroll: false });
       }
     }
   }
@@ -236,9 +247,15 @@ export function WorkspaceShell({
               updatePage(pageId, { parent_page_id: parentPageId, position })
             }
             onSelect={selectPage}
+            onSwitchWorkspace={(workspaceId) => {
+              setSelectedPageId(null);
+              useWorkspaceUi.getState().setView("page");
+              router.push(`/workspace?workspace=${workspaceId}`);
+            }}
             onUpdate={updatePage}
             pages={pages}
             workspace={workspace}
+            workspaces={workspaces}
           />
         </div>
       )}
@@ -259,7 +276,7 @@ export function WorkspaceShell({
             ) : view === "templates" ? (
               <span className="font-medium text-zinc-800">Plantillas</span>
             ) : view === "settings" ? (
-              <span className="font-medium text-zinc-800">Ajustes</span>
+              <span className="font-medium text-zinc-800">Personas y equipo</span>
             ) : breadcrumbs.length ? (
               breadcrumbs.map((page, index) => (
                 <span className="flex min-w-0 items-center" key={page.id}>
@@ -278,6 +295,12 @@ export function WorkspaceShell({
             )}
           </nav>
           <div className="ml-auto flex items-center gap-1">
+            <PresenceList online={online} />
+            {workspace.role === "viewer" && (
+              <span className="mr-1 rounded-md bg-zinc-100 px-2 py-1 text-[11px] font-medium text-zinc-500">
+                Solo lectura
+              </span>
+            )}
             <button
               aria-label={`Tema actual: ${theme === "system" ? "automático" : theme}. Cambiar tema`}
               className="grid size-8 place-items-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
@@ -345,7 +368,7 @@ export function WorkspaceShell({
                 </div>
               </>
             )}
-            <div className="relative">
+            {workspace.role !== "viewer" && <div className="relative">
               <Button
                 aria-expanded={newMenuOpen}
                 onClick={() => setNewMenuOpen((open) => !open)}
@@ -387,7 +410,7 @@ export function WorkspaceShell({
                   </button>
                 </div>
               )}
-            </div>
+            </div>}
           </div>
         </header>
 
@@ -408,7 +431,7 @@ export function WorkspaceShell({
               templates={templates}
             />
           ) : view === "settings" ? (
-            <SettingsView email={email} workspace={workspace} />
+            <TeamSettings email={email} userId={userId} workspace={workspace} />
           ) : selectedPage?.type === "database" ? (
             <DatabaseCanvas
               currentUser={{ id: userId, label: email }}
@@ -435,6 +458,7 @@ export function WorkspaceShell({
               onUploadFile={uploadPageFile}
               page={selectedPage}
               pages={pages}
+              readOnly={workspace.role === "viewer"}
               resolveFileUrl={resolveFileUrl}
             />
           )}
@@ -468,5 +492,29 @@ function HeaderMenuButton({
     >
       <Icon className="size-4 text-zinc-500" /> {label}
     </button>
+  );
+}
+
+function PresenceList({ online }: { online: OnlineCollaborator[] }) {
+  if (!online.length) return null;
+  const visible = online.slice(0, 3);
+  return (
+    <div className="mr-1 flex -space-x-1.5" title={`${online.length} en línea`}>
+      {visible.map((collaborator) => (
+        <span
+          aria-label={`${collaborator.label} está en línea`}
+          className="grid size-7 place-items-center rounded-full border-2 border-white bg-indigo-100 text-[10px] font-semibold text-indigo-700"
+          key={collaborator.userId}
+          title={`${collaborator.label} · en línea`}
+        >
+          {collaborator.label.slice(0, 2).toUpperCase()}
+        </span>
+      ))}
+      {online.length > visible.length && (
+        <span className="grid size-7 place-items-center rounded-full border-2 border-white bg-zinc-100 text-[10px] font-medium text-zinc-600">
+          +{online.length - visible.length}
+        </span>
+      )}
+    </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { toast } from "sonner";
 
 import { getDescendantIds, getNextPosition } from "@/lib/page-tree";
@@ -44,6 +44,41 @@ export function usePages({
       return (data ?? []) as WorkspacePage[];
     },
   });
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(`workspace-pages:${workspaceId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "pages" },
+        (payload) => {
+          queryClient.setQueryData<WorkspacePage[]>(
+            ["workspace-pages", workspaceId],
+            (current = []) => {
+              if (payload.eventType === "DELETE") {
+                const deletedId = (payload.old as { id?: string }).id;
+                return deletedId
+                  ? current.filter((page) => page.id !== deletedId)
+                  : current;
+              }
+              const page = payload.new as WorkspacePage;
+              if (page.workspace_id !== workspaceId) return current;
+              const exists = current.some((item) => item.id === page.id);
+              const next = exists
+                ? current.map((item) => (item.id === page.id ? page : item))
+                : [...current, page];
+              return next.sort(
+                (a, b) => Number(a.position) - Number(b.position),
+              );
+            },
+          );
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [queryClient, supabase, workspaceId]);
 
   function currentPages() {
     return queryClient.getQueryData<WorkspacePage[]>(queryKey) ?? [];

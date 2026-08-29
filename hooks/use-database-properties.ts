@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { toast } from "sonner";
 
 import { createClient } from "@/lib/supabase/client";
@@ -58,6 +58,28 @@ export function useDatabaseProperties(databaseId: string) {
       return (data ?? []) as DatabaseProperty[];
     },
   });
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(`database-properties:${databaseId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          filter: `page_id=eq.${databaseId}`,
+          schema: "public",
+          table: "db_properties",
+        },
+        () =>
+          void queryClient.invalidateQueries({
+            queryKey: ["database-properties", databaseId],
+          }),
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [databaseId, queryClient, supabase]);
 
   function current() {
     return queryClient.getQueryData<DatabaseProperty[]>(queryKey) ?? [];

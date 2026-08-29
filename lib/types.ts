@@ -120,6 +120,35 @@ export type WorkspaceSummary = {
   role: "owner" | "editor" | "viewer";
 };
 
+export type WorkspaceMember = {
+  user_id: string;
+  full_name: string;
+  avatar_url: string | null;
+  role: WorkspaceSummary["role"];
+};
+
+export type WorkspaceInvitation = {
+  id: string;
+  workspace_id: string;
+  email: string;
+  role: "editor" | "viewer";
+  token: string;
+  invited_by: string;
+  expires_at: string;
+  accepted_at: string | null;
+  created_at: string;
+};
+
+export type WorkspaceInvitationPreview = {
+  workspace_id: string;
+  workspace_name: string;
+  workspace_icon: string | null;
+  invited_email: string;
+  invited_role: "editor" | "viewer";
+  expires_at: string;
+  accepted_at: string | null;
+};
+
 export type TemplatePageSnapshot = {
   source_id: string;
   parent_source_id: string | null;

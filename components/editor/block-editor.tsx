@@ -34,6 +34,7 @@ export function BlockEditor({
   onUploadFile,
   page,
   pages,
+  readOnly = false,
   resolveFileUrl,
 }: {
   onCreateSubpage: () => Promise<WorkspacePage | null>;
@@ -41,6 +42,7 @@ export function BlockEditor({
   onUploadFile: (file: File) => Promise<string>;
   page: WorkspacePage;
   pages: WorkspacePage[];
+  readOnly?: boolean;
   resolveFileUrl: (path: string) => Promise<string>;
 }) {
   const { resolvedTheme } = useTheme();
@@ -90,6 +92,16 @@ export function BlockEditor({
   useEffect(() => {
     onSaveRef.current = onSave;
   }, [onSave]);
+
+  useEffect(() => {
+    if (!Array.isArray(page.content) || !page.content.length) return;
+    if (saveState === "pending" || saveState === "saving") return;
+    const incoming = JSON.stringify(page.content);
+    const current = JSON.stringify(editor.document);
+    if (incoming === current) return;
+    editor.replaceBlocks(editor.document, page.content as never);
+    setSaveState("saved");
+  }, [editor, page.content, page.updated_at, saveState]);
 
   useEffect(() => {
     mounted.current = true;
@@ -212,7 +224,8 @@ export function BlockEditor({
       <BlockNoteView
         className="workspace-blocknote"
         editor={editor}
-        onChange={handleChange}
+        editable={!readOnly}
+        onChange={readOnly ? undefined : handleChange}
         slashMenu={false}
         theme={resolvedTheme === "dark" ? "dark" : "light"}
       >

@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Mi espacio" };
 export default async function WorkspacePage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; workspace?: string }>;
 }) {
   const supabase = await getServerSupabase();
 
@@ -36,17 +36,27 @@ export default async function WorkspacePage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: membership, error: membershipError } = await supabase
+  const requested = await searchParams;
+  const { data: membershipRows, error: membershipError } = await supabase
     .from("workspace_members")
     .select("role, workspaces(id, name, icon)")
-    .eq("user_id", user.id)
-    .limit(1)
-    .maybeSingle();
-  const workspaceData = Array.isArray(membership?.workspaces)
-    ? membership.workspaces[0]
-    : membership?.workspaces;
+    .eq("user_id", user.id);
+  const availableWorkspaces = (membershipRows ?? []).flatMap((membership) => {
+    const related = Array.isArray(membership.workspaces)
+      ? membership.workspaces
+      : membership.workspaces
+        ? [membership.workspaces]
+        : [];
+    return related.map((workspace) => ({
+      ...workspace,
+      role: membership.role as WorkspaceSummary["role"],
+    }));
+  }) as WorkspaceSummary[];
+  const workspace =
+    availableWorkspaces.find((item) => item.id === requested.workspace) ??
+    availableWorkspaces[0];
 
-  if (!membership || !workspaceData || membershipError) {
+  if (!workspace || membershipError) {
     return (
       <main className="grid min-h-screen place-items-center bg-zinc-50 px-5">
         <Card className="max-w-lg border-red-200">
@@ -64,7 +74,7 @@ export default async function WorkspacePage({
   const { data: pages, error: pagesError } = await supabase
     .from("pages")
     .select("*")
-    .eq("workspace_id", workspaceData.id)
+    .eq("workspace_id", workspace.id)
     .order("position", { ascending: true });
 
   if (pagesError) {
@@ -80,14 +90,6 @@ export default async function WorkspacePage({
     );
   }
 
-  const requested = await searchParams;
-  const workspace: WorkspaceSummary = {
-    id: workspaceData.id,
-    name: workspaceData.name,
-    icon: workspaceData.icon,
-    role: membership.role as WorkspaceSummary["role"],
-  };
-
   return (
     <QueryProvider>
       <WorkspaceShell
@@ -96,6 +98,7 @@ export default async function WorkspacePage({
         initialSelectedPageId={requested.page ?? null}
         userId={user.id}
         workspace={workspace}
+        workspaces={availableWorkspaces}
       />
     </QueryProvider>
   );

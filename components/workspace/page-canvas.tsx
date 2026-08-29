@@ -54,6 +54,7 @@ export function PageCanvas({
   onUploadFile,
   page,
   pages,
+  readOnly = false,
   resolveFileUrl,
 }: {
   backlinks: WorkspacePage[];
@@ -64,6 +65,7 @@ export function PageCanvas({
   onUploadFile: (pageId: string, file: File) => Promise<string>;
   page: WorkspacePage | null;
   pages: WorkspacePage[];
+  readOnly?: boolean;
   resolveFileUrl: (path: string) => Promise<string>;
 }) {
   const [title, setTitle] = useState(page?.title ?? "");
@@ -152,7 +154,7 @@ export function PageCanvas({
             src={coverUrl}
             style={{ objectPosition: `center ${coverPosition}%` }}
           />
-          <div className="absolute bottom-3 right-4 flex items-center gap-2 rounded-lg bg-white/95 p-2 opacity-0 shadow-sm backdrop-blur transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+          {!readOnly && <div className="absolute bottom-3 right-4 flex items-center gap-2 rounded-lg bg-white/95 p-2 opacity-0 shadow-sm backdrop-blur transition-opacity group-hover:opacity-100 focus-within:opacity-100">
             <label className="flex items-center gap-2 text-xs font-medium text-zinc-600">
               Posición
               <input
@@ -175,7 +177,7 @@ export function PageCanvas({
             >
               <X className="size-3.5" />
             </button>
-          </div>
+          </div>}
         </div>
       )}
 
@@ -185,6 +187,7 @@ export function PageCanvas({
             aria-expanded={iconOpen}
             aria-label="Cambiar icono de página"
             className="text-5xl leading-none transition-transform hover:scale-105"
+            disabled={readOnly}
             onClick={() => setIconOpen((open) => !open)}
             type="button"
           >
@@ -209,7 +212,7 @@ export function PageCanvas({
           )}
         </div>
 
-        {!coverUrl && (
+        {!coverUrl && !readOnly && (
           <button
             className="mb-3 flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
             disabled={coverUploading}
@@ -237,6 +240,7 @@ export function PageCanvas({
             if (event.key === "Enter") event.currentTarget.blur();
           }}
           placeholder="Sin título"
+          readOnly={readOnly}
           value={title}
         />
         <BlockEditor
@@ -248,6 +252,7 @@ export function PageCanvas({
           onUploadFile={(file) => onUploadFile(page.id, file)}
           page={page}
           pages={pages}
+          readOnly={readOnly}
           resolveFileUrl={resolveFileUrl}
         />
         <Backlinks backlinks={backlinks} onOpenPage={onOpenPage} />

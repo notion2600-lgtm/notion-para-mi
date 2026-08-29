@@ -297,6 +297,10 @@ export function WorkspaceSidebar({
           </SidebarSection>
         )}
 
+        <div className="px-4 pb-2 pt-1 text-[11px] font-medium text-zinc-400">
+          Privado
+        </div>
+
         <SidebarSection
           action={workspace.role !== "viewer" ? (
             <button
@@ -308,7 +312,7 @@ export function WorkspaceSidebar({
               <Plus className="size-3.5" />
             </button>
           ) : undefined}
-          label="Espacio de equipo"
+          label="Espacios de equipo"
           onToggle={() => setPrivateOpen(!privateOpen)}
           open={privateOpen}
         >
@@ -480,7 +484,7 @@ function SidebarSection({
     <section className="group/section mb-3">
       <div className="flex h-7 items-center px-2">
         <button
-          className="flex flex-1 items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400"
+          className="flex flex-1 items-center gap-1 text-[11px] font-medium text-zinc-400"
           onClick={onToggle}
           type="button"
         >

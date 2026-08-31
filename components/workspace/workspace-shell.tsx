@@ -358,7 +358,14 @@ export function WorkspaceShell({
             </button>
             {view === "page" && selectedPage && (
               <>
-                <ShareButton pageId={selectedPage.id} title={selectedPage.title} />
+                <ShareButton
+                  onMakeTeam={() => setPageVisibility(selectedPage.id, "team")}
+                  pageId={selectedPage.id}
+                  pageVisibility={selectedPage.visibility}
+                  title={selectedPage.title}
+                  userId={userId}
+                  workspace={workspace}
+                />
                 <FavoriteButton
                   favorite={selectedPage.is_favorite}
                   onClick={() => updatePage(selectedPage.id, { is_favorite: !selectedPage.is_favorite })}

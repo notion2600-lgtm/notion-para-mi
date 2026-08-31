@@ -100,9 +100,25 @@ export function useWorkspaceTeam({
       });
       return null;
     }
+    const invitation = data as WorkspaceInvitation;
+    const next = `/invite/${invitation.token}`;
+    const callbackUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
+    const { error: emailError } = await supabase.auth.signInWithOtp({
+      email: normalizedEmail,
+      options: {
+        emailRedirectTo: callbackUrl,
+        shouldCreateUser: true,
+      },
+    });
     await queryClient.invalidateQueries({ queryKey });
-    toast.success("Invitación creada");
-    return data as WorkspaceInvitation;
+    if (emailError) {
+      toast.warning("Invitación creada; comparte el enlace manualmente", {
+        description: emailError.message,
+      });
+    } else {
+      toast.success("Invitación enviada por correo");
+    }
+    return invitation;
   }
 
   async function updateMemberRole(

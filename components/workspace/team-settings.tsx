@@ -119,7 +119,7 @@ export function TeamSettings({
             </select>
             <Button disabled={pending} type="submit">
               {pending ? <LoaderCircle className="size-4 animate-spin" /> : <MailPlus className="size-4" />}
-              Invitar y copiar enlace
+              Enviar invitación
             </Button>
           </form>
         </section>

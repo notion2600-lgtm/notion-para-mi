@@ -107,6 +107,7 @@ export type WorkspacePage = {
   position: number;
   is_favorite: boolean;
   is_archived: boolean;
+  visibility: "private" | "team";
   archived_at: string | null;
   created_by: string;
   created_at: string;

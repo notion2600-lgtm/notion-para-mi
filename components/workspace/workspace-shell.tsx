@@ -70,6 +70,7 @@ export function WorkspaceShell({
     createDatabaseRow,
     createFromTemplate,
     createPage,
+    createTeamPage,
     deletePagePermanently,
     duplicatePage,
     emptyTrash,
@@ -77,6 +78,7 @@ export function WorkspaceShell({
     resolveFileUrl,
     restorePage,
     saveAsTemplate,
+    setPageVisibility,
     uploadPageFile,
     updatePage,
   } = usePages({ initialPages, userId, workspaceId: workspace.id });
@@ -203,6 +205,12 @@ export function WorkspaceShell({
     setNewMenuOpen(false);
   }
 
+  async function createTeamPageAndSelect() {
+    const page = await createTeamPage();
+    if (page) selectPage(page.id);
+    return page;
+  }
+
   async function createWorkspace(name: string) {
     const workspaceId = crypto.randomUUID();
     const normalizedName = name.trim() || "Nuevo espacio";
@@ -274,6 +282,7 @@ export function WorkspaceShell({
             mobile={isMobile}
             onArchive={archive}
             onCreate={createAndSelect}
+            onCreateTeam={createTeamPageAndSelect}
             onCreateWorkspace={createWorkspace}
             onDuplicate={duplicatePage}
             onMove={(pageId, parentPageId, position) =>
@@ -285,8 +294,10 @@ export function WorkspaceShell({
               useWorkspaceUi.getState().setView("page");
               router.push(`/workspace?workspace=${workspaceId}`);
             }}
+            onSetVisibility={setPageVisibility}
             onUpdate={updatePage}
             pages={pages}
+            userId={userId}
             workspace={workspace}
             workspaces={workspaces}
           />

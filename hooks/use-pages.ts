@@ -91,8 +91,12 @@ export function usePages({
   async function createPage(
     parentPageId: string | null = null,
     type: PageType = "doc",
+    visibility: WorkspacePage["visibility"] = "private",
   ) {
     const previous = currentPages();
+    const parent = parentPageId
+      ? previous.find((page) => page.id === parentPageId)
+      : null;
     const now = new Date().toISOString();
     const page: WorkspacePage = {
       id: crypto.randomUUID(),
@@ -109,6 +113,7 @@ export function usePages({
       position: getNextPosition(previous, parentPageId),
       is_favorite: false,
       is_archived: false,
+      visibility: parent?.visibility ?? visibility,
       archived_at: null,
       created_by: userId,
       created_at: now,
@@ -152,6 +157,7 @@ export function usePages({
         : 1000,
       is_favorite: false,
       is_archived: false,
+      visibility: database.visibility,
       archived_at: null,
       created_by: userId,
       created_at: now,
@@ -213,6 +219,38 @@ export function usePages({
       toast.error("No se pudo guardar el cambio", { description: error.message });
       return false;
     }
+    return true;
+  }
+
+  async function setPageVisibility(
+    pageId: string,
+    visibility: WorkspacePage["visibility"],
+  ) {
+    const previous = currentPages();
+    const ids = getDescendantIds(previous, pageId);
+    const updatedAt = new Date().toISOString();
+    setPages(
+      previous.map((page) =>
+        ids.includes(page.id)
+          ? { ...page, visibility, updated_at: updatedAt }
+          : page,
+      ),
+    );
+
+    const { error } = await supabase
+      .from("pages")
+      .update({ visibility, updated_at: updatedAt })
+      .in("id", ids);
+    if (error) {
+      setPages(previous);
+      toast.error("No se pudo mover la página", { description: error.message });
+      return false;
+    }
+    toast.success(
+      visibility === "team"
+        ? "Página compartida con el equipo"
+        : "Página movida a Privado",
+    );
     return true;
   }
 
@@ -292,6 +330,7 @@ export function usePages({
       rootParentPageId?: string | null;
       rootTitle?: string;
       successMessage: string;
+      visibility?: WorkspacePage["visibility"];
     },
   ) {
     const previous = currentPages();
@@ -312,6 +351,12 @@ export function usePages({
     const rootPosition = options.rootParentDatabaseId
       ? nextDatabaseRowPosition(previous, options.rootParentDatabaseId)
       : getNextPosition(previous, options.rootParentPageId ?? null);
+    const targetParent = previous.find(
+      (page) =>
+        page.id === options.rootParentDatabaseId ||
+        page.id === options.rootParentPageId,
+    );
+    const cloneVisibility = targetParent?.visibility ?? options.visibility ?? "private";
     const clonedPages: WorkspacePage[] = snapshot.pages.map((page) => {
       const isRoot = page.source_id === rootSnapshot.source_id;
       return {
@@ -340,6 +385,7 @@ export function usePages({
         title: isRoot && options.rootTitle ? options.rootTitle : page.title,
         type: page.type,
         updated_at: now,
+        visibility: cloneVisibility,
         workspace_id: workspaceId,
       };
     });
@@ -408,6 +454,7 @@ export function usePages({
       rootParentPageId: source.parent_page_id,
       rootTitle: `${source.title} copia`,
       successMessage: "Página y subpáginas duplicadas",
+      visibility: source.visibility,
     });
   }
 
@@ -579,6 +626,7 @@ export function usePages({
     createPage,
     createDatabase: (parentPageId: string | null = null) =>
       createPage(parentPageId, "database"),
+    createTeamPage: () => createPage(null, "doc", "team"),
     createDatabaseRow,
     createFromTemplate,
     deletePagePermanently: (pageId: string) => deletePagesPermanently([pageId]),
@@ -588,6 +636,7 @@ export function usePages({
     archivePage: (pageId: string) => setArchived(pageId, true),
     resolveFileUrl,
     saveAsTemplate,
+    setPageVisibility,
     uploadPageFile,
     updatePage,
   };

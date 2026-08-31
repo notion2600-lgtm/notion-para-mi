@@ -16,6 +16,7 @@ import {
   FilePlus2,
   FileText,
   LayoutTemplate,
+  LockKeyhole,
   LogOut,
   MoreHorizontal,
   PanelLeftClose,
@@ -27,6 +28,7 @@ import {
   Table2,
   Trash2,
   UserPlus,
+  UsersRound,
 } from "lucide-react";
 import { PointerEvent as ReactPointerEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -50,13 +52,16 @@ export function WorkspaceSidebar({
   mobile = false,
   onArchive,
   onCreate,
+  onCreateTeam,
   onCreateWorkspace,
   onDuplicate,
   onMove,
   onSelect,
   onSwitchWorkspace,
   onUpdate,
+  onSetVisibility,
   pages,
+  userId,
   workspace,
   workspaces,
 }: {
@@ -64,13 +69,16 @@ export function WorkspaceSidebar({
   mobile?: boolean;
   onArchive: (pageId: string) => void;
   onCreate: (parentPageId: string | null) => Promise<WorkspacePage | null>;
+  onCreateTeam: () => Promise<WorkspacePage | null>;
   onCreateWorkspace: (name: string) => Promise<boolean>;
   onDuplicate: (pageId: string) => Promise<WorkspacePage | null>;
   onMove: (pageId: string, parentPageId: string | null, position: number) => void;
   onSelect: (pageId: string) => void;
   onSwitchWorkspace: (workspaceId: string) => void;
   onUpdate: (pageId: string, changes: Partial<WorkspacePage>) => void;
+  onSetVisibility: (pageId: string, visibility: WorkspacePage["visibility"]) => Promise<boolean>;
   pages: WorkspacePage[];
+  userId: string;
   workspace: WorkspaceSummary;
   workspaces: WorkspaceSummary[];
 }) {
@@ -86,12 +94,28 @@ export function WorkspaceSidebar({
   } = useWorkspaceUi();
   const [favoritesOpen, setFavoritesOpen] = useState(true);
   const [privateOpen, setPrivateOpen] = useState(true);
+  const [teamOpen, setTeamOpen] = useState(true);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
-  const tree = useMemo(() => flattenPageTree(pages, expanded), [expanded, pages]);
+  const privatePages = useMemo(
+    () => pages.filter((page) => page.visibility !== "team"),
+    [pages],
+  );
+  const teamPages = useMemo(
+    () => pages.filter((page) => page.visibility === "team"),
+    [pages],
+  );
+  const privateTree = useMemo(
+    () => flattenPageTree(privatePages, expanded),
+    [expanded, privatePages],
+  );
+  const teamTree = useMemo(
+    () => flattenPageTree(teamPages, expanded),
+    [expanded, teamPages],
+  );
   const favorites = useMemo(
     () => sortPages(pages.filter((page) => page.is_favorite && !page.is_archived)),
     [pages],
@@ -119,6 +143,11 @@ export function WorkspaceSidebar({
     if (!page) return;
     if (parentPageId) setExpanded(parentPageId, true);
     onSelect(page.id);
+  }
+
+  async function addTeamPage() {
+    const page = await onCreateTeam();
+    if (page) onSelect(page.id);
   }
 
   function handleDragEnd(event: DragEndEvent) {
@@ -297,10 +326,6 @@ export function WorkspaceSidebar({
           </SidebarSection>
         )}
 
-        <div className="px-4 pb-2 pt-1 text-[11px] font-medium text-zinc-400">
-          Privado
-        </div>
-
         <SidebarSection
           action={workspace.role !== "viewer" ? (
             <button
@@ -312,15 +337,15 @@ export function WorkspaceSidebar({
               <Plus className="size-3.5" />
             </button>
           ) : undefined}
-          label="Espacios de equipo"
+          label="Privado"
           onToggle={() => setPrivateOpen(!privateOpen)}
           open={privateOpen}
         >
           <>
-          {privateOpen && tree.length > 0 ? (
+          {privateOpen && privateTree.length > 0 ? (
             <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd} sensors={sensors}>
-              <SortableContext items={tree.map((page) => page.id)} strategy={verticalListSortingStrategy}>
-                {tree.map((page) => (
+              <SortableContext items={privateTree.map((page) => page.id)} strategy={verticalListSortingStrategy}>
+                {privateTree.map((page) => (
                   <PageRow
                     expanded={Boolean(expanded[page.id])}
                     key={page.id}
@@ -346,10 +371,67 @@ export function WorkspaceSidebar({
               Crear la primera página
             </button>
           ) : null}
-          {privateOpen && tree.length > 0 && workspace.role !== "viewer" && (
+          {privateOpen && privateTree.length > 0 && workspace.role !== "viewer" && (
             <button
               className="mx-2 mt-1 flex h-8 w-[calc(100%-1rem)] items-center gap-2 rounded-md px-2 text-left text-sm text-zinc-400 hover:bg-zinc-200/80 hover:text-zinc-700"
               onClick={() => void addPage(null)}
+              type="button"
+            >
+              <Plus className="size-4" /> Añadir nueva
+            </button>
+          )}
+          </>
+        </SidebarSection>
+
+        <SidebarSection
+          action={workspace.role !== "viewer" ? (
+            <button
+              aria-label="Crear página de equipo"
+              className="grid size-6 place-items-center rounded opacity-0 hover:bg-zinc-200 group-hover/section:opacity-100"
+              onClick={() => void addTeamPage()}
+              type="button"
+            >
+              <Plus className="size-3.5" />
+            </button>
+          ) : undefined}
+          label="Espacios de equipo"
+          onToggle={() => setTeamOpen(!teamOpen)}
+          open={teamOpen}
+        >
+          <>
+          {teamOpen && teamTree.length > 0 ? (
+            <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd} sensors={sensors}>
+              <SortableContext items={teamTree.map((page) => page.id)} strategy={verticalListSortingStrategy}>
+                {teamTree.map((page) => (
+                  <PageRow
+                    expanded={Boolean(expanded[page.id])}
+                    key={page.id}
+                    onAddChild={addPage}
+                    onMenu={(pageId, x, y) => {
+                      if (workspace.role !== "viewer") setContextMenu({ pageId, x, y });
+                    }}
+                    onSelect={onSelect}
+                    onToggle={(pageId) => setExpanded(pageId, !expanded[pageId])}
+                    page={page}
+                    selected={selectedPageId === page.id}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
+          ) : teamOpen && workspace.role !== "viewer" ? (
+            <button
+              className="mx-2 flex w-[calc(100%-1rem)] items-center gap-2 rounded-md border border-dashed px-3 py-2 text-left text-xs text-zinc-500 hover:border-zinc-400 hover:bg-white"
+              onClick={() => void addTeamPage()}
+              type="button"
+            >
+              <UsersRound className="size-3.5" />
+              Crear una página para el equipo
+            </button>
+          ) : null}
+          {teamOpen && teamTree.length > 0 && workspace.role !== "viewer" && (
+            <button
+              className="mx-2 mt-1 flex h-8 w-[calc(100%-1rem)] items-center gap-2 rounded-md px-2 text-left text-sm text-zinc-400 hover:bg-zinc-200/80 hover:text-zinc-700"
+              onClick={() => void addTeamPage()}
               type="button"
             >
               <Plus className="size-4" /> Añadir nueva
@@ -440,6 +522,25 @@ export function WorkspaceSidebar({
               setContextMenu(null);
             }}
           />
+          {contextPage.visibility !== "team" ? (
+            <MenuButton
+              icon={UsersRound}
+              label="Compartir con el equipo"
+              onClick={async () => {
+                await onSetVisibility(contextPage.id, "team");
+                setContextMenu(null);
+              }}
+            />
+          ) : contextPage.created_by === userId ? (
+            <MenuButton
+              icon={LockKeyhole}
+              label="Mover a Privado"
+              onClick={async () => {
+                await onSetVisibility(contextPage.id, "private");
+                setContextMenu(null);
+              }}
+            />
+          ) : null}
           <MenuButton
             icon={FileText}
             label="Copiar enlace"

@@ -14,7 +14,10 @@ export type DatabasePropertyType =
   | "person"
   | "relation"
   | "created_time"
-  | "last_edited_time";
+  | "last_edited_time"
+  | "files"
+  | "created_by"
+  | "last_edited_by";
 
 export type DatabaseOption = {
   id: string;
@@ -69,6 +72,7 @@ export type DatabaseFilterRule = {
 };
 
 export type DatabaseViewFilters = {
+  calculations?: Record<string, string>;
   calendarMode?: "month" | "week";
   mode: "and" | "or";
   rules: DatabaseFilterRule[];
@@ -110,6 +114,7 @@ export type WorkspacePage = {
   visibility: "private" | "team";
   archived_at: string | null;
   created_by: string;
+  updated_by: string | null;
   created_at: string;
   updated_at: string;
 };

@@ -6,6 +6,7 @@ import { useTheme } from "next-themes";
 import { useCallback, useMemo } from "react";
 
 import { workspaceEditorSchema } from "@/components/editor/editor-schema";
+import { PageIcon } from "@/components/workspace/page-icon";
 import { createClient } from "@/lib/supabase/client";
 import type { DatabaseProperty, WorkspacePage } from "@/lib/types";
 
@@ -44,7 +45,7 @@ export function PublicPageRenderer({
         />
       )}
       <article className="mx-auto w-full max-w-[900px] px-5 pt-12 sm:px-12 sm:pt-16">
-        <div className="text-5xl">{page.icon || "📄"}</div>
+        <div className="text-5xl"><PageIcon className="size-10 text-5xl" icon={page.icon} /></div>
         <h1 className="mt-5 text-4xl font-bold tracking-[-0.04em] sm:text-5xl">{page.title}</h1>
         {page.type === "database" ? (
           <PublicDatabase
@@ -66,7 +67,7 @@ export function PublicPageRenderer({
                 .filter((child) => child.parent_database_id === null)
                 .map((child) => (
                   <section key={child.id}>
-                    <h3 className="text-2xl font-semibold">{child.icon || "📄"} {child.title}</h3>
+                    <h3 className="text-2xl font-semibold"><PageIcon icon={child.icon} /> {child.title}</h3>
                     {child.type === "database" ? (
                       <PublicDatabase
                         database={child}
@@ -144,7 +145,7 @@ function PublicDatabase({
         <tbody>
           {rows.map((row) => (
             <tr key={row.id}>
-              <td className="border-b px-3 py-3 font-medium">{row.icon || "📄"} {row.title}</td>
+              <td className="border-b px-3 py-3 font-medium"><PageIcon icon={row.icon} /> {row.title}</td>
               {properties.filter((property) => !property.config.hidden).map((property) => (
                 <td className="border-b px-3 py-3 text-zinc-500" key={property.id}>
                   {publicPropertyValue(row, property)}

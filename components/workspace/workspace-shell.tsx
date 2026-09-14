@@ -8,6 +8,7 @@ import {
   FileText,
   LayoutTemplate,
   Menu,
+  MessageSquare,
   MoreHorizontal,
   Moon,
   Plus,
@@ -21,7 +22,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { DatabaseCanvas } from "@/components/database/database-canvas";
+import { DatabaseCanvas, RowPropertiesList } from "@/components/database/database-canvas";
+import { CommentsPanel } from "@/components/workspace/comments-panel";
+import { PageIcon } from "@/components/workspace/page-icon";
 import {
   FavoriteButton,
   PageCanvas,
@@ -32,8 +35,11 @@ import { SearchDialog } from "@/components/workspace/search-dialog";
 import { ShareButton } from "@/components/workspace/share-button";
 import { TeamSettings } from "@/components/workspace/team-settings";
 import { TemplatesView } from "@/components/workspace/templates-view";
+import { useComments } from "@/hooks/use-comments";
+import { useDatabaseProperties } from "@/hooks/use-database-properties";
 import { usePageTemplates } from "@/hooks/use-page-templates";
 import { usePages } from "@/hooks/use-pages";
+import { useWorkspaceTeam } from "@/hooks/use-workspace-team";
 import {
   useWorkspacePresence,
   type OnlineCollaborator,
@@ -88,6 +94,8 @@ export function WorkspaceShell({
     isLoading: templatesLoading,
     templates,
   } = usePageTemplates(workspace.id, userId);
+  const { members } = useWorkspaceTeam({ userId, workspace });
+  const [commentsOpen, setCommentsOpen] = useState(false);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -109,6 +117,12 @@ export function WorkspaceShell({
     () => pages.find((page) => page.id === selectedPageId && !page.is_archived) ?? null,
     [pages, selectedPageId],
   );
+  const rowDatabaseId = selectedPage?.parent_database_id ?? null;
+  const {
+    properties: rowProperties,
+    updateProperty: updateRowDatabaseProperty,
+  } = useDatabaseProperties(rowDatabaseId ?? "");
+  const { unresolvedCount: unresolvedComments } = useComments(selectedPage?.id ?? "");
   const breadcrumbs = selectedPage ? getPagePath(pages, selectedPage.id) : [];
   const backlinks = useMemo(
     () => (selectedPage ? getBacklinks(pages, selectedPage.id) : []),
@@ -330,7 +344,7 @@ export function WorkspaceShell({
                     onClick={() => selectPage(page.id)}
                     type="button"
                   >
-                    {page.icon || "📄"} {page.title}
+                    <PageIcon icon={page.icon} /> {page.title}
                   </button>
                 </span>
               ))
@@ -358,6 +372,19 @@ export function WorkspaceShell({
             </button>
             {view === "page" && selectedPage && (
               <>
+                <button
+                  aria-label="Comentarios"
+                  className="relative grid size-8 place-items-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
+                  onClick={() => setCommentsOpen((open) => !open)}
+                  type="button"
+                >
+                  <MessageSquare className="size-4" />
+                  {unresolvedComments > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 grid size-4 place-items-center rounded-full bg-indigo-600 text-[9px] font-semibold text-white">
+                      {unresolvedComments > 9 ? "9+" : unresolvedComments}
+                    </span>
+                  )}
+                </button>
                 <ShareButton
                   onMakeTeam={() => setPageVisibility(selectedPage.id, "team")}
                   pageId={selectedPage.id}
@@ -488,13 +515,16 @@ export function WorkspaceShell({
               currentUser={{ id: userId, label: email }}
               database={selectedPage}
               backlinks={backlinks}
+              members={members}
               onArchiveRows={archiveRows}
               onCreateRow={() => createDatabaseRow(selectedPage.id)}
               onOpenRow={selectPage}
               onOpenPage={selectPage}
               onResolveFileUrl={resolveFileUrl}
               onUpdatePage={updatePage}
+              onUploadFile={uploadPageFile}
               pages={pages}
+              readOnly={workspace.role === "viewer"}
               rows={databaseRows}
             />
           ) : (
@@ -509,6 +539,21 @@ export function WorkspaceShell({
               onUploadFile={uploadPageFile}
               page={selectedPage}
               pages={pages}
+              propertiesPanel={
+                selectedPage && rowDatabaseId ? (
+                  <RowPropertiesList
+                    currentUser={{ id: userId, label: email }}
+                    members={members}
+                    onResolveFileUrl={resolveFileUrl}
+                    onUpdatePage={updatePage}
+                    onUpdateProperty={updateRowDatabaseProperty}
+                    onUploadFile={uploadPageFile}
+                    pages={pages}
+                    properties={rowProperties}
+                    row={selectedPage}
+                  />
+                ) : undefined
+              }
               readOnly={workspace.role === "viewer"}
               resolveFileUrl={resolveFileUrl}
             />
@@ -522,6 +567,13 @@ export function WorkspaceShell({
         pages={pages}
         workspaceId={workspace.id}
       />
+      {commentsOpen && selectedPage && (
+        <CommentsPanel
+          onClose={() => setCommentsOpen(false)}
+          pageId={selectedPage.id}
+          userId={userId}
+        />
+      )}
     </div>
   );
 }

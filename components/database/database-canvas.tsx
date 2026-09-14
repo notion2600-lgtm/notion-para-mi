@@ -5,11 +5,13 @@ import {
   Columns3,
   ArrowDown,
   ArrowUp,
+  Check,
   ChevronDown,
   ChevronRight,
   Copy,
   Eye,
   EyeOff,
+  ExternalLink,
   Filter,
   GalleryVerticalEnd,
   Group,
@@ -65,7 +67,10 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { IconPicker } from "@/components/workspace/icon-picker";
 import { Backlinks } from "@/components/workspace/page-canvas";
+import { PageIcon } from "@/components/workspace/page-icon";
+import { PageHero } from "@/components/workspace/page-hero";
 import {
   DATABASE_PROPERTY_TYPES,
   useDatabaseProperties,
@@ -83,6 +88,7 @@ import type {
   DatabasePropertyType,
   DatabaseView,
   DatabaseViewType,
+  WorkspaceMember,
   WorkspacePage,
 } from "@/lib/types";
 
@@ -91,6 +97,7 @@ const OPTION_COLORS = ["gray", "blue", "green", "amber", "red", "violet", "pink"
 export function DatabaseCanvas({
   backlinks,
   currentUser,
+  members,
   database,
   onArchiveRows,
   onCreateRow,
@@ -98,11 +105,14 @@ export function DatabaseCanvas({
   onOpenPage,
   onResolveFileUrl,
   onUpdatePage,
+  onUploadFile,
   pages,
+  readOnly = false,
   rows,
 }: {
   backlinks: WorkspacePage[];
   currentUser: { id: string; label: string };
+  members: WorkspaceMember[];
   database: WorkspacePage;
   onArchiveRows: (rowIds: string[]) => Promise<boolean>;
   onCreateRow: () => Promise<WorkspacePage | null>;
@@ -110,7 +120,9 @@ export function DatabaseCanvas({
   onOpenPage: (pageId: string) => void;
   onResolveFileUrl: (path: string) => Promise<string>;
   onUpdatePage: (pageId: string, changes: Partial<WorkspacePage>) => Promise<boolean>;
+  onUploadFile: (pageId: string, file: File) => Promise<string>;
   pages: WorkspacePage[];
+  readOnly?: boolean;
   rows: WorkspacePage[];
 }) {
   const {
@@ -128,7 +140,6 @@ export function DatabaseCanvas({
     updateView,
     views,
   } = useDatabaseViews(database.id);
-  const [title, setTitle] = useState(database.title);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [viewControlsOpen, setViewControlsOpen] = useState(false);
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
@@ -158,7 +169,6 @@ export function DatabaseCanvas({
       ? database.properties._title_width
       : 280);
 
-  useEffect(() => setTitle(database.title), [database.id, database.title]);
   useEffect(() => {
     const linkedViewId = new URL(window.location.href).searchParams.get("view");
     setActiveViewId((current) => {
@@ -188,14 +198,6 @@ export function DatabaseCanvas({
     window.addEventListener("keydown", closePanels);
     return () => window.removeEventListener("keydown", closePanels);
   }, []);
-
-  function saveTitle() {
-    const nextTitle = title.trim() || "Base de datos";
-    setTitle(nextTitle);
-    if (nextTitle !== database.title) {
-      void onUpdatePage(database.id, { title: nextTitle });
-    }
-  }
 
   function toggleRow(rowId: string) {
     setSelected((current) => {
@@ -351,20 +353,23 @@ export function DatabaseCanvas({
   }
 
   return (
-    <section className="relative mx-auto w-full max-w-[1400px] px-4 pb-28 pt-10 sm:px-10 sm:pt-16">
-      <div className="mb-2 text-5xl">{database.icon || "📊"}</div>
-      <input
-        aria-label="Título de la base de datos"
-        className="w-full border-none bg-transparent text-3xl font-bold tracking-[-0.035em] outline-none placeholder:text-zinc-300 sm:text-[40px] sm:leading-[1.2]"
-        onBlur={saveTitle}
-        onChange={(event) => setTitle(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") event.currentTarget.blur();
-        }}
-        value={title}
+    <section className="relative mx-auto w-full max-w-[1400px] pb-28">
+      <PageHero
+        contentClassName="w-full px-4 sm:px-10"
+        coverPath={database.cover_url}
+        icon={database.icon}
+        onUpdate={(changes) => onUpdatePage(database.id, changes)}
+        onUploadFile={(file) => onUploadFile(database.id, file)}
+        properties={database.properties}
+        readOnly={readOnly}
+        resolveFileUrl={onResolveFileUrl}
+        title={database.title}
+        titleAriaLabel="Título de la base de datos"
+        titleClassName="w-full border-none bg-transparent text-3xl font-bold tracking-[-0.035em] outline-none placeholder:text-zinc-300 sm:text-[40px] sm:leading-[1.2]"
+        titlePlaceholder="Base de datos"
       />
 
-      <div className="mt-8 flex min-h-10 flex-wrap items-center gap-1 border-b">
+      <div className="mt-8 flex min-h-10 flex-wrap items-center gap-1 border-b px-4 sm:px-10">
         {views.map((view) => (
           <ViewTab
             active={activeView?.id === view.id}
@@ -482,6 +487,7 @@ export function DatabaseCanvas({
         )}
       </div>
 
+      <div className="px-4 sm:px-10">
       {propertiesOpen && (
         <PropertyPanel
           newPropertyType={newPropertyType}
@@ -497,6 +503,7 @@ export function DatabaseCanvas({
       {viewControlsOpen && activeView && (
         <ViewControls
           currentUser={currentUser}
+          members={members}
           onDelete={async () => {
             const deleted = await deleteView(activeView.id);
             if (deleted) setViewControlsOpen(false);
@@ -512,6 +519,7 @@ export function DatabaseCanvas({
         <DatabaseViewSurface
           columnWidths={columnWidths}
           currentUser={currentUser}
+          members={members}
           database={database}
           onCreateProperty={createColumn}
           onCreateRow={onCreateRow}
@@ -530,6 +538,7 @@ export function DatabaseCanvas({
           onInsertProperty={insertProperty}
           onOpenRow={(rowId) => setPeekRowId(rowId)}
           onResolveFileUrl={onResolveFileUrl}
+          onUploadFile={onUploadFile}
           onResizeColumn={(propertyId, width) =>
             setColumnWidths((current) => ({ ...current, [propertyId]: width }))
           }
@@ -555,13 +564,18 @@ export function DatabaseCanvas({
       )}
 
       <Backlinks backlinks={backlinks} onOpenPage={onOpenPage} />
+      </div>
 
       {peekRow && (
         <RowPeek
           currentUser={currentUser}
+          members={members}
           onClose={() => setPeekRowId(null)}
           onOpenFull={() => onOpenRow(peekRow.id)}
+          onResolveFileUrl={onResolveFileUrl}
           onUpdatePage={onUpdatePage}
+          onUpdateProperty={updateProperty}
+          onUploadFile={onUploadFile}
           pages={pages}
           properties={properties}
           row={peekRow}
@@ -574,6 +588,7 @@ export function DatabaseCanvas({
 type ViewSurfaceProps = {
   columnWidths: Record<string, number>;
   currentUser: { id: string; label: string };
+  members: WorkspaceMember[];
   database: WorkspacePage;
   onCreateProperty: (
     name: string,
@@ -594,6 +609,7 @@ type ViewSurfaceProps = {
   onResizeColumn: (propertyId: string, width: number) => void;
   onSortProperty: (property: DatabaseProperty, direction: "asc" | "desc") => void;
   onToggleRow: (rowId: string) => void;
+  onUploadFile: (rowId: string, file: File) => Promise<string>;
   onUpdatePage: (pageId: string, changes: Partial<WorkspacePage>) => Promise<boolean>;
   onUpdateProperty: (
     propertyId: string,
@@ -624,6 +640,7 @@ function DatabaseViewSurface(props: ViewSurfaceProps) {
 function TableView({
   columnWidths,
   currentUser,
+  members,
   database,
   onCreateProperty,
   onCreateRow,
@@ -634,11 +651,14 @@ function TableView({
   onHideProperty,
   onInsertProperty,
   onOpenRow,
+  onResolveFileUrl,
   onResizeColumn,
   onSortProperty,
   onToggleRow,
   onUpdatePage,
   onUpdateProperty,
+  onUpdateView,
+  onUploadFile,
   pages,
   properties,
   rows,
@@ -649,7 +669,7 @@ function TableView({
   view,
   visibleProperties,
 }: ViewSurfaceProps) {
-  const groups = groupRows(rows, view.group_by, properties, currentUser, pages);
+  const groups = groupRows(rows, view.group_by, properties, currentUser, members, pages);
   return (
     <div className="mt-3 overflow-x-auto rounded-md border bg-white">
       <table className="w-max min-w-full border-collapse text-sm font-normal">
@@ -749,6 +769,7 @@ function TableView({
                   <RowTitleCell
                     onOpen={() => onOpenRow(row.id)}
                     onUpdate={(value) => onUpdatePage(row.id, { title: value })}
+                    onUpdateIcon={(icon) => onUpdatePage(row.id, { icon })}
                     row={row}
                   />
                 </td>
@@ -756,7 +777,11 @@ function TableView({
                   <td className="border-b border-r p-0" key={property.id}>
                     <DatabaseCell
                       currentUser={currentUser}
+                      members={members}
                       onCommit={(value) => updateCell(row, property.id, value)}
+                      onResolveFileUrl={onResolveFileUrl}
+                      onUpdateProperty={onUpdateProperty}
+                      onUploadFile={(file) => onUploadFile(row.id, file)}
                       pages={pages}
                       property={property}
                       row={row}
@@ -778,6 +803,30 @@ function TableView({
             ))}
           </tbody>
         ))}
+        <tfoot>
+          <tr className="h-9 border-t bg-zinc-50/60 text-xs text-zinc-500">
+            <td className="border-r px-3" />
+            <td className="border-r px-2 text-zinc-400">{rows.length} filas</td>
+            {visibleProperties.map((property) => (
+              <td className="border-r p-0" key={property.id}>
+                <ColumnCalculationCell
+                  calc={view.filters.calculations?.[property.id] ?? "none"}
+                  onChange={(calc) =>
+                    void onUpdateView({
+                      filters: {
+                        ...view.filters,
+                        calculations: { ...view.filters.calculations, [property.id]: calc },
+                      },
+                    })
+                  }
+                  property={property}
+                  rows={rows}
+                />
+              </td>
+            ))}
+            <td />
+          </tr>
+        </tfoot>
       </table>
       <EmptyRows rows={rows} />
       <NewRowButton onCreateRow={onCreateRow} />
@@ -1117,28 +1166,17 @@ function ColumnHeaderEditor({
             )}
 
             {configurableOptions && (
-              <label className="mt-2 block px-2 py-1 text-xs font-medium text-zinc-500">
-                Opciones separadas por comas
-                <input
-                  className="mt-1.5 h-9 w-full rounded-lg border border-zinc-200 bg-white px-2 text-sm font-normal text-zinc-800 outline-none focus:ring-2 focus:ring-indigo-100"
-                  defaultValue={(property.config.options ?? [])
-                    .map((option) => option.label)
-                    .join(", ")}
-                  key={JSON.stringify(property.config.options)}
-                  onBlur={(event) =>
+              <div className="mt-2 block px-2 py-1 text-xs font-medium text-zinc-500">
+                Opciones
+                <OptionListEditor
+                  onChange={(options) =>
                     void onUpdate(property.id, {
-                      config: {
-                        ...property.config,
-                        options: optionsFromText(
-                          event.target.value,
-                          property.config.options ?? [],
-                        ),
-                      },
+                      config: { ...property.config, options },
                     })
                   }
-                  placeholder="Nuevo, En curso, Listo"
+                  options={property.config.options ?? []}
                 />
-              </label>
+              </div>
             )}
           </div>
 
@@ -1395,6 +1433,7 @@ function AddColumnButton({
 
 function ListView({
   currentUser,
+  members,
   onCreateRow,
   onOpenRow,
   pages,
@@ -1403,7 +1442,7 @@ function ListView({
   view,
   visibleProperties,
 }: ViewSurfaceProps) {
-  const groups = groupRows(rows, view.group_by, properties, currentUser, pages);
+  const groups = groupRows(rows, view.group_by, properties, currentUser, members, pages);
   return (
     <div className="mt-3 overflow-hidden rounded-xl border bg-white">
       {groups.map((group) => (
@@ -1420,11 +1459,11 @@ function ListView({
               onClick={() => onOpenRow(row.id)}
               type="button"
             >
-              <span className="text-lg">{row.icon || "📄"}</span>
+              <span className="text-lg"><PageIcon icon={row.icon} /></span>
               <span className="min-w-0 flex-1 truncate text-sm font-medium">{row.title}</span>
               {visibleProperties.slice(0, 4).map((property) => (
                 <span className="max-w-40 truncate text-xs text-zinc-500" key={property.id}>
-                  {propertyDisplayValue(row, property, currentUser, pages)}
+                  {propertyDisplayValue(row, property, currentUser, members, pages)}
                 </span>
               ))}
               <ChevronRight className="size-4 text-zinc-300 group-hover:text-zinc-600" />
@@ -1440,6 +1479,7 @@ function ListView({
 
 function BoardView({
   currentUser,
+  members,
   onCreateRow,
   onOpenRow,
   pages,
@@ -1456,7 +1496,7 @@ function BoardView({
         property.id === view.group_by &&
         ["select", "status", "person"].includes(property.type),
     ) ?? null;
-  const groups = boardGroups(groupProperty, currentUser);
+  const groups = boardGroups(groupProperty, currentUser, members);
 
   if (!groupProperty) {
     return (
@@ -1481,6 +1521,7 @@ function BoardView({
         {groups.map((group) => (
           <BoardColumn
             currentUser={currentUser}
+            members={members}
             group={group}
             key={group.key}
             onOpenRow={onOpenRow}
@@ -1505,6 +1546,7 @@ function BoardView({
 
 function BoardColumn({
   currentUser,
+  members,
   group,
   onOpenRow,
   pages,
@@ -1512,6 +1554,7 @@ function BoardColumn({
   rows,
 }: {
   currentUser: { id: string; label: string };
+  members: WorkspaceMember[];
   group: { key: string; label: string; value: string };
   onOpenRow: (rowId: string) => void;
   pages: WorkspacePage[];
@@ -1537,6 +1580,7 @@ function BoardColumn({
         {rows.map((row) => (
           <BoardCard
             currentUser={currentUser}
+            members={members}
             key={row.id}
             onOpen={() => onOpenRow(row.id)}
             pages={pages}
@@ -1551,12 +1595,14 @@ function BoardColumn({
 
 function BoardCard({
   currentUser,
+  members,
   onOpen,
   pages,
   properties,
   row,
 }: {
   currentUser: { id: string; label: string };
+  members: WorkspaceMember[];
   onOpen: () => void;
   pages: WorkspacePage[];
   properties: DatabaseProperty[];
@@ -1575,13 +1621,13 @@ function BoardCard({
       {...listeners}
     >
       <button className="w-full text-left text-sm font-medium" onClick={onOpen} type="button">
-        {row.icon || "📄"} {row.title}
+        <PageIcon icon={row.icon} /> {row.title}
       </button>
       <div className="mt-2 space-y-1">
         {properties.slice(0, 3).map((property) => (
           <div className="truncate text-xs text-zinc-500" key={property.id}>
             <span className="mr-1 text-zinc-400">{property.name}:</span>
-            {propertyDisplayValue(row, property, currentUser, pages)}
+            {propertyDisplayValue(row, property, currentUser, members, pages)}
           </div>
         ))}
       </div>
@@ -1591,6 +1637,7 @@ function BoardCard({
 
 function CalendarView({
   currentUser,
+  members,
   onCreateRow,
   onOpenRow,
   pages,
@@ -1681,6 +1728,7 @@ function CalendarView({
           {days.map((day) => (
             <CalendarDay
               currentUser={currentUser}
+              members={members}
               day={day}
               inMonth={mode === "week" || isSameMonth(day, cursor)}
               key={day.toISOString()}
@@ -1716,6 +1764,7 @@ function CalendarDay({
   rows,
 }: {
   currentUser: { id: string; label: string };
+  members: WorkspaceMember[];
   day: Date;
   inMonth: boolean;
   onOpenRow: (rowId: string) => void;
@@ -1760,13 +1809,14 @@ function CalendarEvent({ onOpen, row }: { onOpen: () => void; row: WorkspacePage
       {...attributes}
       {...listeners}
     >
-      {row.icon || "📄"} {row.title}
+      <PageIcon icon={row.icon} /> {row.title}
     </button>
   );
 }
 
 function GalleryView({
   currentUser,
+  members,
   onCreateRow,
   onOpenRow,
   onResolveFileUrl,
@@ -1776,7 +1826,7 @@ function GalleryView({
   view,
   visibleProperties,
 }: ViewSurfaceProps) {
-  const groups = groupRows(rows, view.group_by, properties, currentUser, pages);
+  const groups = groupRows(rows, view.group_by, properties, currentUser, members, pages);
   return (
     <div className="mt-3 space-y-4">
       {groups.map((group) => (
@@ -1796,13 +1846,13 @@ function GalleryView({
               >
                 <CoverPreview path={row.cover_url} resolveFileUrl={onResolveFileUrl} />
                 <div className="p-3">
-                  <div className="truncate text-sm font-semibold">{row.icon || "📄"} {row.title}</div>
+                  <div className="truncate text-sm font-semibold"><PageIcon icon={row.icon} /> {row.title}</div>
                   <div className="mt-2 space-y-1">
                     {visibleProperties.slice(0, 4).map((property) => (
                       <div className="flex gap-2 text-xs" key={property.id}>
                         <span className="shrink-0 text-zinc-400">{property.name}</span>
                         <span className="min-w-0 truncate text-zinc-600">
-                          {propertyDisplayValue(row, property, currentUser, pages)}
+                          {propertyDisplayValue(row, property, currentUser, members, pages)}
                         </span>
                       </div>
                     ))}
@@ -1860,6 +1910,7 @@ function CoverPreview({
 
 function ViewControls({
   currentUser,
+  members,
   onDelete,
   onUpdate,
   pages,
@@ -1867,6 +1918,7 @@ function ViewControls({
   view,
 }: {
   currentUser: { id: string; label: string };
+  members: WorkspaceMember[];
   onDelete: () => Promise<void>;
   onUpdate: (
     changes: Partial<Pick<DatabaseView, "filters" | "group_by" | "name" | "sorts" | "type" | "visible_properties">>,
@@ -1998,6 +2050,7 @@ function ViewControls({
                   </select>
                   <FilterValueInput
                     currentUser={currentUser}
+                    members={members}
                     onChange={(value) => updateFilter(rule.id, { value })}
                     operator={rule.operator}
                     pages={pages}
@@ -2094,6 +2147,7 @@ function ViewControls({
 
 function FilterValueInput({
   currentUser,
+  members,
   onChange,
   operator,
   pages,
@@ -2101,6 +2155,7 @@ function FilterValueInput({
   value,
 }: {
   currentUser: { id: string; label: string };
+  members: WorkspaceMember[];
   onChange: (value: unknown) => void;
   operator: DatabaseFilterOperator;
   pages: WorkspacePage[];
@@ -2119,10 +2174,13 @@ function FilterValueInput({
     );
   }
   if (property?.type === "person") {
+    const roster = members.length
+      ? members
+      : [{ full_name: currentUser.label, user_id: currentUser.id }];
     return (
       <select className="h-8 min-w-0 rounded border bg-white px-1" onChange={(event) => onChange(event.target.value)} value={typeof value === "string" ? value : ""}>
         <option value="">Elegir…</option>
-        <option value={currentUser.id}>{currentUser.label}</option>
+        {roster.map((member) => <option key={member.user_id} value={member.user_id}>{member.full_name || "Sin nombre"}</option>)}
       </select>
     );
   }
@@ -2601,23 +2659,17 @@ function PropertyEditorRow({
       )}
 
       {configurableOptions && (
-        <label className="mt-2 grid grid-cols-[auto_1fr] items-center gap-2 pl-8 text-xs text-zinc-500">
+        <div className="mt-2 pl-8 text-xs text-zinc-500">
           Opciones
-          <input
-            className="h-8 rounded-md border bg-white px-2 text-zinc-800"
-            defaultValue={(property.config.options ?? []).map((option) => option.label).join(", ")}
-            key={JSON.stringify(property.config.options)}
-            onBlur={(event) =>
+          <OptionListEditor
+            onChange={(options) =>
               void onUpdate(property.id, {
-                config: {
-                  ...property.config,
-                  options: optionsFromText(event.target.value, property.config.options ?? []),
-                },
+                config: { ...property.config, options },
               })
             }
-            placeholder="Nuevo, En curso, Listo"
+            options={property.config.options ?? []}
           />
-        </label>
+        </div>
       )}
     </div>
   );
@@ -2626,10 +2678,12 @@ function PropertyEditorRow({
 function RowTitleCell({
   onOpen,
   onUpdate,
+  onUpdateIcon,
   row,
 }: {
   onOpen: () => void;
   onUpdate: (value: string) => Promise<boolean>;
+  onUpdateIcon: (icon: string | null) => void;
   row: WorkspacePage;
 }) {
   const [value, setValue] = useState(row.title);
@@ -2637,7 +2691,7 @@ function RowTitleCell({
 
   return (
     <div className="flex h-10 items-center gap-1 px-2">
-      <span className="shrink-0">{row.icon || "📄"}</span>
+      <IconPicker icon={row.icon} onChange={onUpdateIcon} size="sm" />
       <input
         aria-label="Nombre de fila"
         className="min-w-0 flex-1 bg-transparent outline-none"
@@ -2666,22 +2720,72 @@ function RowTitleCell({
 
 function DatabaseCell({
   currentUser,
+  members,
   onCommit,
+  onResolveFileUrl,
+  onUpdateProperty,
+  onUploadFile,
   pages,
   property,
   row,
   value,
 }: {
   currentUser: { id: string; label: string };
+  members: WorkspaceMember[];
   onCommit: (value: unknown) => Promise<boolean>;
+  onResolveFileUrl: (path: string) => Promise<string>;
+  onUpdateProperty: (
+    propertyId: string,
+    changes: Partial<Pick<DatabaseProperty, "config" | "name" | "position" | "type">>,
+  ) => Promise<boolean>;
+  onUploadFile: (file: File) => Promise<string>;
   pages: WorkspacePage[];
   property: DatabaseProperty;
   row: WorkspacePage;
   value: unknown;
 }) {
+  function createOption(label: string): string {
+    const usedColors = new Set((property.config.options ?? []).map((option) => option.color));
+    const color =
+      OPTION_COLORS.find((item) => !usedColors.has(item)) ??
+      OPTION_COLORS[(property.config.options?.length ?? 0) % OPTION_COLORS.length];
+    const option: DatabaseOption = { color, id: crypto.randomUUID(), label };
+    void onUpdateProperty(property.id, {
+      config: { ...property.config, options: [...(property.config.options ?? []), option] },
+    });
+    return option.id;
+  }
+
   if (property.type === "created_time" || property.type === "last_edited_time") {
     const date = property.type === "created_time" ? row.created_at : row.updated_at;
     return <div className="px-3 py-2 text-xs text-zinc-500">{formatDateTime(date)}</div>;
+  }
+
+  if (property.type === "created_by" || property.type === "last_edited_by") {
+    const userId = property.type === "created_by" ? row.created_by : row.updated_by;
+    const name =
+      userId === currentUser.id
+        ? currentUser.label
+        : (members.find((member) => member.user_id === userId)?.full_name ?? "—");
+    return (
+      <div className="flex items-center gap-1.5 px-3 py-2 text-xs text-zinc-500">
+        <span className="grid size-4 shrink-0 place-items-center rounded-full bg-zinc-100 text-[9px] font-semibold text-zinc-600">
+          {name.slice(0, 1).toUpperCase()}
+        </span>
+        {name}
+      </div>
+    );
+  }
+
+  if (property.type === "files") {
+    return (
+      <FilesCell
+        onCommit={onCommit}
+        onResolveFileUrl={onResolveFileUrl}
+        onUploadFile={onUploadFile}
+        value={value}
+      />
+    );
   }
 
   if (property.type === "checkbox") {
@@ -2698,44 +2802,25 @@ function DatabaseCell({
 
   if (property.type === "select" || property.type === "status") {
     return (
-      <select
-        aria-label={property.name}
-        className="h-10 w-full bg-transparent px-2 outline-none"
-        onChange={(event) => void onCommit(event.target.value || null)}
-        value={typeof value === "string" ? value : ""}
-      >
-        <option value="">Vacío</option>
-        {(property.config.options ?? []).map((option) => (
-          <option key={option.id} value={option.id}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      <OptionPickerCell
+        multiple={false}
+        onCommit={onCommit}
+        onCreateOption={createOption}
+        options={property.config.options ?? []}
+        value={value}
+      />
     );
   }
 
   if (property.type === "multi_select") {
-    const selectedValues = Array.isArray(value)
-      ? value.filter((item): item is string => typeof item === "string")
-      : [];
     return (
-      <select
-        aria-label={property.name}
-        className="min-h-10 w-full bg-transparent px-2 py-1 text-xs outline-none"
+      <OptionPickerCell
         multiple
-        onChange={(event) =>
-          void onCommit(
-            [...event.target.selectedOptions].map((option) => option.value),
-          )
-        }
-        value={selectedValues}
-      >
-        {(property.config.options ?? []).map((option) => (
-          <option key={option.id} value={option.id}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+        onCommit={onCommit}
+        onCreateOption={createOption}
+        options={property.config.options ?? []}
+        value={value}
+      />
     );
   }
 
@@ -2768,36 +2853,20 @@ function DatabaseCell({
   }
 
   if (property.type === "person") {
-    return (
-      <select
-        aria-label={property.name}
-        className="h-10 w-full bg-transparent px-2 outline-none"
-        onChange={(event) => void onCommit(event.target.value || null)}
-        value={typeof value === "string" ? value : ""}
-      >
-        <option value="">Sin asignar</option>
-        <option value={currentUser.id}>{currentUser.label}</option>
-      </select>
-    );
+    const roster = members.length
+      ? members
+      : [{ avatar_url: null, full_name: currentUser.label, role: "owner" as const, user_id: currentUser.id }];
+    return <PersonPickerCell members={roster} onCommit={onCommit} value={value} />;
   }
 
   if (property.type === "relation") {
     return (
-      <select
-        aria-label={property.name}
-        className="h-10 w-full bg-transparent px-2 outline-none"
-        onChange={(event) => void onCommit(event.target.value || null)}
-        value={typeof value === "string" ? value : ""}
-      >
-        <option value="">Sin relación</option>
-        {pages
-          .filter((page) => !page.is_archived && page.id !== row.id)
-          .map((page) => (
-            <option key={page.id} value={page.id}>
-              {page.icon || "📄"} {page.title}
-            </option>
-          ))}
-      </select>
+      <RelationPickerCell
+        currentRowId={row.id}
+        onCommit={onCommit}
+        pages={pages}
+        value={value}
+      />
     );
   }
 
@@ -2809,6 +2878,121 @@ function DatabaseCell({
       value={value}
     />
   );
+}
+
+function FilesCell({
+  onCommit,
+  onResolveFileUrl,
+  onUploadFile,
+  value,
+}: {
+  onCommit: (value: unknown) => Promise<boolean>;
+  onResolveFileUrl: (path: string) => Promise<string>;
+  onUploadFile: (file: File) => Promise<string>;
+  value: unknown;
+}) {
+  const paths = Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function addFiles(fileList: FileList | null) {
+    if (!fileList?.length) return;
+    setUploading(true);
+    try {
+      const uploaded: string[] = [];
+      for (const file of Array.from(fileList)) {
+        uploaded.push(await onUploadFile(file));
+      }
+      await onCommit([...paths, ...uploaded]);
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  function removeFile(path: string) {
+    void onCommit(paths.filter((item) => item !== path));
+  }
+
+  return (
+    <div className="flex min-h-10 flex-wrap items-center gap-1 px-2 py-1">
+      {paths.map((path) => (
+        <FileChip key={path} onRemove={() => removeFile(path)} path={path} resolveFileUrl={onResolveFileUrl} />
+      ))}
+      <button
+        aria-label="Adjuntar archivo"
+        className="grid size-6 shrink-0 place-items-center rounded text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
+        disabled={uploading}
+        onClick={() => inputRef.current?.click()}
+        type="button"
+      >
+        {uploading ? <LoaderCircle className="size-3.5 animate-spin" /> : <Plus className="size-3.5" />}
+      </button>
+      <input
+        className="hidden"
+        multiple
+        onChange={(event) => void addFiles(event.target.files)}
+        ref={inputRef}
+        type="file"
+      />
+    </div>
+  );
+}
+
+function FileChip({
+  onRemove,
+  path,
+  resolveFileUrl,
+}: {
+  onRemove: () => void;
+  path: string;
+  resolveFileUrl: (path: string) => Promise<string>;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    void resolveFileUrl(path)
+      .then((next) => {
+        if (active) setUrl(next);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [path, resolveFileUrl]);
+  const name = fileNameFromPath(path);
+
+  return (
+    <span className="inline-flex max-w-[160px] items-center gap-1 rounded-md bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium text-zinc-700">
+      <a
+        className="truncate hover:underline"
+        href={url ?? "#"}
+        onClick={(event) => {
+          if (!url) event.preventDefault();
+        }}
+        rel="noreferrer"
+        target="_blank"
+        title={name}
+      >
+        {name}
+      </a>
+      <button
+        aria-label="Quitar archivo"
+        className="shrink-0 text-zinc-400 hover:text-red-500"
+        onClick={onRemove}
+        type="button"
+      >
+        <X className="size-3" />
+      </button>
+    </span>
+  );
+}
+
+function fileNameFromPath(path: string) {
+  const base = path.split("/").pop() ?? path;
+  return decodeURIComponent(base.replace(/^[0-9a-f-]{36}-/i, ""));
 }
 
 function TextLikeCell({
@@ -2840,6 +3024,7 @@ function TextLikeCell({
           : type === "phone"
             ? "tel"
             : "text";
+  const externalHref = resolveExternalHref(type, draft);
 
   return (
     <div className="flex h-10 items-center px-2">
@@ -2864,23 +3049,504 @@ function TextLikeCell({
       {type === "number" && numberFormat === "percent" && (
         <span className="ml-1 text-xs text-zinc-400">%</span>
       )}
+      {externalHref && (
+        <a
+          aria-label="Abrir enlace"
+          className="ml-1 grid size-6 shrink-0 place-items-center rounded text-zinc-400 hover:bg-zinc-100 hover:text-indigo-600"
+          href={externalHref}
+          onClick={(event) => event.stopPropagation()}
+          onMouseDown={(event) => event.preventDefault()}
+          rel="noreferrer"
+          target="_blank"
+        >
+          <ExternalLink className="size-3.5" />
+        </a>
+      )}
+    </div>
+  );
+}
+
+function resolveExternalHref(type: DatabasePropertyType, text: string): string | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  if (type === "url") {
+    return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  }
+  if (/^(https?:\/\/|www\.)\S+\.\S{2,}$/i.test(trimmed)) {
+    return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  }
+  return null;
+}
+
+const BASE_CALCULATIONS = [
+  { label: "Calcular", value: "none" },
+  { label: "Total", value: "count_all" },
+  { label: "Con valor", value: "count_values" },
+  { label: "Vacías", value: "count_empty" },
+  { label: "% vacías", value: "percent_empty" },
+  { label: "% con valor", value: "percent_not_empty" },
+];
+const NUMBER_CALCULATIONS = [
+  { label: "Suma", value: "sum" },
+  { label: "Promedio", value: "average" },
+  { label: "Mínimo", value: "min" },
+  { label: "Máximo", value: "max" },
+];
+const CHECKBOX_CALCULATIONS = [
+  { label: "Marcadas", value: "count_checked" },
+  { label: "% marcadas", value: "percent_checked" },
+];
+
+function calculationsForType(type: DatabasePropertyType) {
+  if (type === "number") return [...BASE_CALCULATIONS, ...NUMBER_CALCULATIONS];
+  if (type === "checkbox") return [...BASE_CALCULATIONS, ...CHECKBOX_CALCULATIONS];
+  return BASE_CALCULATIONS;
+}
+
+function formatCalcNumber(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+function computeCalculation(
+  calc: string,
+  property: DatabaseProperty,
+  rows: WorkspacePage[],
+): string {
+  const values = rows.map((row) => row.properties[property.id]);
+  const total = values.length;
+  const nonEmpty = values.filter((value) => !isEmptyValue(value));
+
+  switch (calc) {
+    case "count_all":
+      return String(total);
+    case "count_values":
+      return String(nonEmpty.length);
+    case "count_empty":
+      return String(total - nonEmpty.length);
+    case "percent_empty":
+      return total ? `${Math.round(((total - nonEmpty.length) / total) * 100)}%` : "0%";
+    case "percent_not_empty":
+      return total ? `${Math.round((nonEmpty.length / total) * 100)}%` : "0%";
+    case "sum":
+      return formatCalcNumber(nonEmpty.reduce<number>((acc, value) => acc + Number(value), 0));
+    case "average":
+      return nonEmpty.length
+        ? formatCalcNumber(
+            nonEmpty.reduce<number>((acc, value) => acc + Number(value), 0) / nonEmpty.length,
+          )
+        : "0";
+    case "min":
+      return nonEmpty.length ? formatCalcNumber(Math.min(...nonEmpty.map(Number))) : "—";
+    case "max":
+      return nonEmpty.length ? formatCalcNumber(Math.max(...nonEmpty.map(Number))) : "—";
+    case "count_checked":
+      return String(values.filter(Boolean).length);
+    case "percent_checked":
+      return total ? `${Math.round((values.filter(Boolean).length / total) * 100)}%` : "0%";
+    default:
+      return "";
+  }
+}
+
+function ColumnCalculationCell({
+  calc,
+  onChange,
+  property,
+  rows,
+}: {
+  calc: string;
+  onChange: (calc: string) => void;
+  property: DatabaseProperty;
+  rows: WorkspacePage[];
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const options = calculationsForType(property.type);
+
+  useEffect(() => {
+    if (!open) return;
+    function onOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onOutside);
+    return () => document.removeEventListener("mousedown", onOutside);
+  }, [open]);
+
+  const result = calc !== "none" ? computeCalculation(calc, property, rows) : null;
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        className="flex h-9 w-full items-center justify-end px-2 text-right text-xs text-zinc-500 hover:bg-zinc-100"
+        onClick={() => setOpen((current) => !current)}
+        type="button"
+      >
+        {result ?? <span className="text-zinc-300">Calcular</span>}
+      </button>
+      {open && (
+        <div className="absolute bottom-full right-0 z-30 mb-1 w-40 rounded-lg border bg-white p-1 shadow-xl">
+          {options.map((option) => (
+            <button
+              className={`flex h-8 w-full items-center rounded-md px-2 text-left text-xs hover:bg-zinc-100 ${
+                calc === option.value ? "font-medium text-indigo-600" : "text-zinc-700"
+              }`}
+              key={option.value}
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+              type="button"
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PickerCell({
+  chip,
+  emptyLabel = "Vacío",
+  itemLeading,
+  items,
+  multiple = false,
+  onChange,
+  onCreate,
+  selectedIds,
+}: {
+  chip: (id: string) => ReactNode;
+  emptyLabel?: string;
+  itemLeading?: (id: string) => ReactNode;
+  items: { id: string; label: string }[];
+  multiple?: boolean;
+  onChange: (nextIds: string[]) => void;
+  onCreate?: (label: string) => string;
+  selectedIds: string[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onOutside);
+    return () => document.removeEventListener("mousedown", onOutside);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) setQuery("");
+  }, [open]);
+
+  const normalizedQuery = query.trim().toLocaleLowerCase("es");
+  const filtered = normalizedQuery
+    ? items.filter((item) => item.label.toLocaleLowerCase("es").includes(normalizedQuery))
+    : items;
+  const exactMatch = items.some(
+    (item) => item.label.toLocaleLowerCase("es") === normalizedQuery,
+  );
+  const selected = items.filter((item) => selectedIds.includes(item.id));
+
+  function toggle(id: string) {
+    if (multiple) {
+      onChange(
+        selectedIds.includes(id)
+          ? selectedIds.filter((existing) => existing !== id)
+          : [...selectedIds, id],
+      );
+    } else {
+      onChange(selectedIds.includes(id) ? [] : [id]);
+      setOpen(false);
+    }
+  }
+
+  function createFromQuery() {
+    if (!onCreate || !query.trim()) return;
+    const id = onCreate(query.trim());
+    if (multiple) onChange([...selectedIds, id]);
+    else {
+      onChange([id]);
+      setOpen(false);
+    }
+    setQuery("");
+  }
+
+  return (
+    <div className="relative h-10 w-full" ref={containerRef}>
+      <button
+        aria-expanded={open}
+        className="flex h-10 w-full flex-wrap items-center gap-1 px-2 text-left"
+        onClick={() => setOpen((current) => !current)}
+        type="button"
+      >
+        {selected.length ? (
+          selected.map((item) => <span key={item.id}>{chip(item.id)}</span>)
+        ) : (
+          <span className="text-xs text-zinc-400">{emptyLabel}</span>
+        )}
+      </button>
+      {open && (
+        <div
+          className="absolute left-0 top-full z-30 mt-1 w-64 rounded-xl border bg-white p-2 shadow-xl"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <input
+            autoFocus
+            className="mb-2 w-full rounded-md border px-2 py-1 text-xs outline-none focus:border-indigo-400"
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && onCreate && query.trim() && !exactMatch) {
+                createFromQuery();
+              }
+            }}
+            placeholder="Buscar…"
+            value={query}
+          />
+          <div className="max-h-56 space-y-0.5 overflow-y-auto">
+            {filtered.map((item) => (
+              <button
+                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-zinc-100 ${
+                  selectedIds.includes(item.id) ? "bg-zinc-50" : ""
+                }`}
+                key={item.id}
+                onClick={() => toggle(item.id)}
+                type="button"
+              >
+                {multiple && (
+                  <span
+                    className={`grid size-3.5 shrink-0 place-items-center rounded-sm border ${
+                      selectedIds.includes(item.id)
+                        ? "border-indigo-500 bg-indigo-500 text-white"
+                        : "border-zinc-300"
+                    }`}
+                  >
+                    {selectedIds.includes(item.id) && <Check className="size-2.5" />}
+                  </span>
+                )}
+                {itemLeading?.(item.id)}
+                <span className="min-w-0 flex-1 truncate">{item.label}</span>
+              </button>
+            ))}
+            {filtered.length === 0 && !query && (
+              <p className="px-2 py-3 text-center text-xs text-zinc-400">Sin opciones</p>
+            )}
+            {onCreate && query.trim() && !exactMatch && (
+              <button
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-indigo-600 hover:bg-indigo-50"
+                onClick={createFromQuery}
+                type="button"
+              >
+                <Plus className="size-3.5" /> Crear &ldquo;{query.trim()}&rdquo;
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OptionPickerCell({
+  multiple,
+  onCommit,
+  onCreateOption,
+  options,
+  value,
+}: {
+  multiple: boolean;
+  onCommit: (value: unknown) => Promise<boolean>;
+  onCreateOption: (label: string) => string;
+  options: DatabaseOption[];
+  value: unknown;
+}) {
+  const selectedIds = multiple
+    ? Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === "string")
+      : []
+    : typeof value === "string" && value
+      ? [value]
+      : [];
+
+  return (
+    <PickerCell
+      chip={(id) => {
+        const option = options.find((item) => item.id === id);
+        if (!option) return null;
+        return (
+          <span
+            className={`rounded-md px-1.5 py-0.5 text-[11px] font-medium ${
+              OPTION_COLOR_STYLES[option.color] ?? OPTION_COLOR_STYLES.gray
+            }`}
+          >
+            {option.label}
+          </span>
+        );
+      }}
+      items={options.map((option) => ({ id: option.id, label: option.label }))}
+      multiple={multiple}
+      onChange={(ids) => void onCommit(multiple ? ids : (ids[0] ?? null))}
+      onCreate={onCreateOption}
+      selectedIds={selectedIds}
+    />
+  );
+}
+
+function PersonPickerCell({
+  members,
+  onCommit,
+  value,
+}: {
+  members: WorkspaceMember[];
+  onCommit: (value: unknown) => Promise<boolean>;
+  value: unknown;
+}) {
+  const selectedIds = typeof value === "string" && value ? [value] : [];
+
+  return (
+    <PickerCell
+      chip={(id) => {
+        const member = members.find((item) => item.user_id === id);
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium text-zinc-700">
+            <span className="grid size-4 shrink-0 place-items-center rounded-full bg-indigo-100 text-[9px] font-semibold text-indigo-700">
+              {(member?.full_name || "?").slice(0, 1).toUpperCase()}
+            </span>
+            {member?.full_name || "Sin nombre"}
+          </span>
+        );
+      }}
+      emptyLabel="Sin asignar"
+      items={members.map((member) => ({ id: member.user_id, label: member.full_name || "Sin nombre" }))}
+      onChange={(ids) => void onCommit(ids[0] ?? null)}
+      selectedIds={selectedIds}
+    />
+  );
+}
+
+function RelationPickerCell({
+  currentRowId,
+  onCommit,
+  pages,
+  value,
+}: {
+  currentRowId: string;
+  onCommit: (value: unknown) => Promise<boolean>;
+  pages: WorkspacePage[];
+  value: unknown;
+}) {
+  const candidates = pages.filter((page) => !page.is_archived && page.id !== currentRowId);
+  const selectedIds = typeof value === "string" && value ? [value] : [];
+
+  return (
+    <PickerCell
+      chip={(id) => {
+        const page = candidates.find((item) => item.id === id);
+        return (
+          <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-1.5 py-0.5 text-[11px] font-medium text-zinc-700">
+            {page?.icon || "📄"} {page?.title ?? "…"}
+          </span>
+        );
+      }}
+      emptyLabel="Sin relación"
+      items={candidates.map((page) => ({ id: page.id, label: page.title }))}
+      onChange={(ids) => void onCommit(ids[0] ?? null)}
+      selectedIds={selectedIds}
+    />
+  );
+}
+
+export function RowPropertiesList({
+  currentUser,
+  members,
+  onResolveFileUrl,
+  onUpdatePage,
+  onUpdateProperty,
+  onUploadFile,
+  pages,
+  properties,
+  row,
+}: {
+  currentUser: { id: string; label: string };
+  members: WorkspaceMember[];
+  onResolveFileUrl: (path: string) => Promise<string>;
+  onUpdatePage: (pageId: string, changes: Partial<WorkspacePage>) => Promise<boolean>;
+  onUpdateProperty: (
+    propertyId: string,
+    changes: Partial<Pick<DatabaseProperty, "config" | "name" | "position" | "type">>,
+  ) => Promise<boolean>;
+  onUploadFile: (rowId: string, file: File) => Promise<string>;
+  pages: WorkspacePage[];
+  properties: DatabaseProperty[];
+  row: WorkspacePage;
+}) {
+  return (
+    <div className="mb-8 divide-y rounded-xl border">
+      {properties.map((property) => (
+        <div className="grid grid-cols-[140px_1fr] items-center" key={property.id}>
+          <div className="px-3 py-2 text-xs font-medium text-zinc-500">
+            {propertyTypeIcon(property.type)} {property.name}
+          </div>
+          <div className="border-l">
+            <DatabaseCell
+              currentUser={currentUser}
+              members={members}
+              onCommit={(value) =>
+                onUpdatePage(row.id, {
+                  properties: { ...row.properties, [property.id]: value },
+                })
+              }
+              onResolveFileUrl={onResolveFileUrl}
+              onUpdateProperty={onUpdateProperty}
+              onUploadFile={(file) => onUploadFile(row.id, file)}
+              pages={pages}
+              property={property}
+              row={row}
+              value={row.properties[property.id]}
+            />
+          </div>
+        </div>
+      ))}
+      {properties.length === 0 && (
+        <p className="px-4 py-8 text-center text-sm text-zinc-400">
+          Esta base de datos aún no tiene propiedades.
+        </p>
+      )}
     </div>
   );
 }
 
 function RowPeek({
   currentUser,
+  members,
   onClose,
   onOpenFull,
+  onResolveFileUrl,
   onUpdatePage,
+  onUpdateProperty,
+  onUploadFile,
   pages,
   properties,
   row,
 }: {
   currentUser: { id: string; label: string };
+  members: WorkspaceMember[];
   onClose: () => void;
   onOpenFull: () => void;
+  onResolveFileUrl: (path: string) => Promise<string>;
   onUpdatePage: (pageId: string, changes: Partial<WorkspacePage>) => Promise<boolean>;
+  onUpdateProperty: (
+    propertyId: string,
+    changes: Partial<Pick<DatabaseProperty, "config" | "name" | "position" | "type">>,
+  ) => Promise<boolean>;
+  onUploadFile: (rowId: string, file: File) => Promise<string>;
   pages: WorkspacePage[];
   properties: DatabaseProperty[];
   row: WorkspacePage;
@@ -2907,7 +3573,11 @@ function RowPeek({
         </div>
       </div>
       <div className="px-10 py-12">
-        <div className="text-4xl">{row.icon || "📄"}</div>
+        <IconPicker
+          icon={row.icon}
+          onChange={(icon) => void onUpdatePage(row.id, { icon })}
+          triggerClassName="text-4xl leading-none transition-transform hover:scale-105"
+        />
         <input
           aria-label="Título de la fila"
           className="mt-3 w-full bg-transparent text-3xl font-bold tracking-tight outline-none"
@@ -2919,34 +3589,17 @@ function RowPeek({
           onChange={(event) => setTitle(event.target.value)}
           value={title}
         />
-        <div className="mt-8 divide-y rounded-xl border">
-          {properties.map((property) => (
-            <div className="grid grid-cols-[140px_1fr] items-center" key={property.id}>
-              <div className="px-3 py-2 text-xs font-medium text-zinc-500">
-                {propertyTypeIcon(property.type)} {property.name}
-              </div>
-              <div className="border-l">
-                <DatabaseCell
-                  currentUser={currentUser}
-                  onCommit={(value) =>
-                    onUpdatePage(row.id, {
-                      properties: { ...row.properties, [property.id]: value },
-                    })
-                  }
-                  pages={pages}
-                  property={property}
-                  row={row}
-                  value={row.properties[property.id]}
-                />
-              </div>
-            </div>
-          ))}
-          {properties.length === 0 && (
-            <p className="px-4 py-8 text-center text-sm text-zinc-400">
-              Esta base de datos aún no tiene propiedades.
-            </p>
-          )}
-        </div>
+        <RowPropertiesList
+          currentUser={currentUser}
+          members={members}
+          onResolveFileUrl={onResolveFileUrl}
+          onUpdatePage={onUpdatePage}
+          onUpdateProperty={onUpdateProperty}
+          onUploadFile={onUploadFile}
+          pages={pages}
+          properties={properties}
+          row={row}
+        />
         <button
           className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed px-4 py-6 text-sm text-zinc-500 hover:border-zinc-400 hover:bg-zinc-50"
           onClick={onOpenFull}
@@ -3009,20 +3662,123 @@ function configForType(
   return base;
 }
 
-function optionsFromText(text: string, previous: DatabaseOption[]) {
-  const labels = [...new Set(text.split(",").map((label) => label.trim()).filter(Boolean))];
-  return labels.map((label, index) => {
-    const existing = previous.find(
-      (option) => option.label.toLocaleLowerCase("es") === label.toLocaleLowerCase("es"),
-    );
-    return (
-      existing ?? {
-        color: OPTION_COLORS[index % OPTION_COLORS.length],
-        id: crypto.randomUUID(),
-        label,
-      }
-    );
-  });
+const OPTION_COLOR_STYLES: Record<string, string> = {
+  amber: "bg-amber-100 text-amber-800",
+  blue: "bg-blue-100 text-blue-700",
+  gray: "bg-zinc-200 text-zinc-700",
+  green: "bg-green-100 text-green-700",
+  pink: "bg-pink-100 text-pink-700",
+  red: "bg-red-100 text-red-700",
+  violet: "bg-violet-100 text-violet-700",
+};
+
+function OptionListEditor({
+  onChange,
+  options,
+}: {
+  onChange: (options: DatabaseOption[]) => void;
+  options: DatabaseOption[];
+}) {
+  const [colorMenuId, setColorMenuId] = useState<string | null>(null);
+
+  function updateOption(id: string, changes: Partial<DatabaseOption>) {
+    onChange(options.map((option) => (option.id === id ? { ...option, ...changes } : option)));
+  }
+
+  function removeOption(id: string) {
+    onChange(options.filter((option) => option.id !== id));
+  }
+
+  function moveOption(id: string, direction: -1 | 1) {
+    const index = options.findIndex((option) => option.id === id);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= options.length) return;
+    const next = [...options];
+    [next[index], next[target]] = [next[target], next[index]];
+    onChange(next);
+  }
+
+  function addOption() {
+    const usedColors = new Set(options.map((option) => option.color));
+    const color =
+      OPTION_COLORS.find((item) => !usedColors.has(item)) ??
+      OPTION_COLORS[options.length % OPTION_COLORS.length];
+    onChange([...options, { color, id: crypto.randomUUID(), label: "Nueva opción" }]);
+  }
+
+  return (
+    <div className="mt-1.5 space-y-1">
+      {options.map((option, index) => (
+        <div className="flex items-center gap-1" key={option.id}>
+          <div className="relative">
+            <button
+              aria-label="Color de la opción"
+              className={`grid size-6 shrink-0 place-items-center rounded-md text-[10px] font-semibold ${OPTION_COLOR_STYLES[option.color] ?? OPTION_COLOR_STYLES.gray}`}
+              onClick={() => setColorMenuId((current) => (current === option.id ? null : option.id))}
+              type="button"
+            >
+              ●
+            </button>
+            {colorMenuId === option.id && (
+              <div className="absolute left-0 top-7 z-10 grid grid-cols-4 gap-1 rounded-lg border bg-white p-1.5 shadow-lg">
+                {OPTION_COLORS.map((color) => (
+                  <button
+                    aria-label={`Color ${color}`}
+                    className={`size-5 rounded-md ${OPTION_COLOR_STYLES[color]} ${option.color === color ? "ring-2 ring-indigo-400" : ""}`}
+                    key={color}
+                    onClick={() => {
+                      updateOption(option.id, { color });
+                      setColorMenuId(null);
+                    }}
+                    type="button"
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+          <input
+            aria-label="Nombre de la opción"
+            className="h-7 min-w-0 flex-1 rounded-md border bg-white px-2 text-xs outline-none focus:ring-2 focus:ring-indigo-100"
+            onChange={(event) => updateOption(option.id, { label: event.target.value })}
+            value={option.label}
+          />
+          <button
+            aria-label="Subir opción"
+            className="grid size-6 shrink-0 place-items-center rounded hover:bg-zinc-100 disabled:opacity-30"
+            disabled={index === 0}
+            onClick={() => moveOption(option.id, -1)}
+            type="button"
+          >
+            <ArrowUp className="size-3" />
+          </button>
+          <button
+            aria-label="Bajar opción"
+            className="grid size-6 shrink-0 place-items-center rounded hover:bg-zinc-100 disabled:opacity-30"
+            disabled={index === options.length - 1}
+            onClick={() => moveOption(option.id, 1)}
+            type="button"
+          >
+            <ArrowDown className="size-3" />
+          </button>
+          <button
+            aria-label="Eliminar opción"
+            className="grid size-6 shrink-0 place-items-center rounded text-zinc-400 hover:bg-red-50 hover:text-red-500"
+            onClick={() => removeOption(option.id)}
+            type="button"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      ))}
+      <button
+        className="flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-xs font-medium text-zinc-500 hover:bg-zinc-100"
+        onClick={addOption}
+        type="button"
+      >
+        <Plus className="size-3.5" /> Añadir opción
+      </button>
+    </div>
+  );
 }
 
 function propertyTypeIcon(type: DatabasePropertyType) {
@@ -3041,6 +3797,9 @@ function propertyTypeIcon(type: DatabasePropertyType) {
     relation: "↔",
     created_time: "◷",
     last_edited_time: "◷",
+    files: "📎",
+    created_by: "◐",
+    last_edited_by: "◐",
   };
   return icons[type];
 }
@@ -3193,6 +3952,7 @@ function groupRows(
   groupBy: string | null,
   properties: DatabaseProperty[],
   currentUser: { id: string; label: string },
+  members: WorkspaceMember[],
   pages: WorkspacePage[],
 ) {
   const property = properties.find((item) => item.id === groupBy);
@@ -3206,7 +3966,7 @@ function groupRows(
   return [...groups.entries()].map(([key, groupedRows]) => ({
     key: key || "empty",
     label: key
-      ? propertyDisplayValue(groupedRows[0], property, currentUser, pages)
+      ? propertyDisplayValue(groupedRows[0], property, currentUser, members, pages)
       : "Sin valor",
     rows: groupedRows,
   }));
@@ -3215,11 +3975,14 @@ function groupRows(
 function boardGroups(
   property: DatabaseProperty | null,
   currentUser: { id: string; label: string },
+  members: WorkspaceMember[],
 ) {
   const groups = [{ key: "empty", label: "Sin asignar", value: "" }];
   if (!property) return groups;
   if (property.type === "person") {
-    groups.push({ key: currentUser.id, label: currentUser.label, value: currentUser.id });
+    for (const member of members.length ? members : [{ full_name: currentUser.label, user_id: currentUser.id }]) {
+      groups.push({ key: member.user_id, label: member.full_name || "Sin nombre", value: member.user_id });
+    }
     return groups;
   }
   for (const option of property.config.options ?? []) {
@@ -3232,12 +3995,21 @@ function propertyDisplayValue(
   row: WorkspacePage,
   property: DatabaseProperty,
   currentUser: { id: string; label: string },
+  members: WorkspaceMember[],
   pages: WorkspacePage[],
 ) {
   if (property.type === "created_time") return formatDateTime(row.created_at);
   if (property.type === "last_edited_time") return formatDateTime(row.updated_at);
+  if (property.type === "created_by" || property.type === "last_edited_by") {
+    const userId = property.type === "created_by" ? row.created_by : row.updated_by;
+    if (userId === currentUser.id) return currentUser.label;
+    return members.find((member) => member.user_id === userId)?.full_name ?? "—";
+  }
   const value = row.properties[property.id];
   if (isEmptyValue(value)) return "—";
+  if (property.type === "files") {
+    return Array.isArray(value) && value.length ? `${value.length} archivo(s)` : "—";
+  }
   if (property.type === "checkbox") return value ? "Sí" : "No";
   if (property.type === "date") {
     const start = dateStart(value);
@@ -3245,7 +4017,10 @@ function propertyDisplayValue(
     const end = isRecord(value) && typeof value.end === "string" ? value.end : null;
     return end ? `${start} – ${end}` : start;
   }
-  if (property.type === "person") return value === currentUser.id ? currentUser.label : "Sin asignar";
+  if (property.type === "person") {
+    if (value === currentUser.id) return currentUser.label;
+    return members.find((member) => member.user_id === value)?.full_name ?? "Sin asignar";
+  }
   if (property.type === "relation") {
     const related = pages.find((page) => page.id === value);
     return related ? related.title : "—";

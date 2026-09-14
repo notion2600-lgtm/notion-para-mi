@@ -33,6 +33,7 @@ import {
 import { PointerEvent as ReactPointerEvent, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { PageIcon } from "@/components/workspace/page-icon";
 import { PageRow } from "@/components/workspace/page-row";
 import {
   flattenPageTree,
@@ -618,12 +619,13 @@ function SidebarPageButton({
       type="button"
     >
       <span>
-        {page.icon ||
-          (page.type === "database" ? (
-            <Table2 className="size-4 text-zinc-400" />
-          ) : (
-            <FileText className="size-4 text-zinc-400" />
-          ))}
+        {page.icon ? (
+          <PageIcon icon={page.icon} />
+        ) : page.type === "database" ? (
+          <Table2 className="size-4 text-zinc-400" />
+        ) : (
+          <FileText className="size-4 text-zinc-400" />
+        )}
       </span>
       <span className="truncate">{page.title}</span>
       {page.is_favorite && <Star className="ml-auto size-3 fill-current text-amber-500" />}

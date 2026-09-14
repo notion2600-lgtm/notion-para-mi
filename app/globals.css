@@ -207,14 +207,27 @@ textarea {
 }
 
 .workspace-columns {
-  display: grid;
+  display: flex;
+  align-items: stretch;
   width: 100%;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
+  gap: 0;
 }
 
-.workspace-columns label {
-  display: block;
+.workspace-columns-item-wrap {
+  display: flex;
+  min-width: 0;
+  align-items: stretch;
+}
+
+.workspace-columns-item {
+  position: relative;
+  min-width: 0;
+  flex: 1;
+  padding: 0 0.5rem;
+}
+
+.workspace-columns-item:first-child {
+  padding-left: 0;
 }
 
 .workspace-columns textarea {
@@ -231,6 +244,72 @@ textarea {
 .workspace-columns textarea:focus {
   border-color: rgb(165 180 252);
   box-shadow: 0 0 0 3px rgb(224 231 255 / 0.75);
+}
+
+.workspace-columns-remove {
+  position: absolute;
+  right: 0.25rem;
+  top: 0.25rem;
+  display: grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 0.25rem;
+  background: rgb(255 255 255 / 0.9);
+  color: rgb(113 113 122);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.workspace-columns-item:hover .workspace-columns-remove {
+  opacity: 1;
+}
+
+.workspace-columns-remove:hover {
+  background: rgb(254 226 226);
+  color: rgb(220 38 38);
+}
+
+.workspace-columns-divider {
+  flex: none;
+  width: 0.5rem;
+  margin: 0 -0.25rem;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.workspace-columns-divider::after {
+  content: "";
+  display: block;
+  width: 2px;
+  height: 100%;
+  margin: 0 auto;
+  border-radius: 999px;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+.workspace-columns-divider:hover::after,
+.workspace-columns-divider.is-dragging::after {
+  background: rgb(165 180 252);
+}
+
+.workspace-columns-add {
+  display: grid;
+  flex: none;
+  align-self: flex-start;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-left: 0.5rem;
+  border: 1px dashed rgb(212 212 216);
+  border-radius: 0.5rem;
+  color: rgb(113 113 122);
+}
+
+.workspace-columns-add:hover {
+  border-color: rgb(165 180 252);
+  color: rgb(79 70 229);
 }
 
 .workspace-subpage {

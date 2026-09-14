@@ -12,6 +12,7 @@ import {
   Table2,
 } from "lucide-react";
 
+import { PageIcon } from "@/components/workspace/page-icon";
 import { cn } from "@/lib/utils";
 import type { FlatPage } from "@/lib/page-tree";
 
@@ -84,12 +85,13 @@ export function PageRow({
         type="button"
       >
         <span className="shrink-0 text-[15px]">
-          {page.icon ||
-            (page.type === "database" ? (
-              <Table2 className="size-4 text-zinc-400" />
-            ) : (
-              <FileText className="size-4 text-zinc-400" />
-            ))}
+          {page.icon ? (
+            <PageIcon icon={page.icon} />
+          ) : page.type === "database" ? (
+            <Table2 className="size-4 text-zinc-400" />
+          ) : (
+            <FileText className="size-4 text-zinc-400" />
+          )}
         </span>
         <span className="truncate">{page.title || "Sin título"}</span>
       </button>

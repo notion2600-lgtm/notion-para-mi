@@ -116,6 +116,7 @@ export function usePages({
       visibility: parent?.visibility ?? visibility,
       archived_at: null,
       created_by: userId,
+      updated_by: userId,
       created_at: now,
       updated_at: now,
     };
@@ -160,6 +161,7 @@ export function usePages({
       visibility: database.visibility,
       archived_at: null,
       created_by: userId,
+      updated_by: userId,
       created_at: now,
       updated_at: now,
     };
@@ -206,13 +208,15 @@ export function usePages({
     const updatedAt = new Date().toISOString();
     setPages(
       previous.map((page) =>
-        page.id === pageId ? { ...page, ...changes, updated_at: updatedAt } : page,
+        page.id === pageId
+          ? { ...page, ...changes, updated_at: updatedAt, updated_by: userId }
+          : page,
       ),
     );
 
     const { error } = await supabase
       .from("pages")
-      .update({ ...changes, updated_at: updatedAt })
+      .update({ ...changes, updated_at: updatedAt, updated_by: userId })
       .eq("id", pageId);
     if (error) {
       setPages(previous);
@@ -385,6 +389,7 @@ export function usePages({
         title: isRoot && options.rootTitle ? options.rootTitle : page.title,
         type: page.type,
         updated_at: now,
+        updated_by: userId,
         visibility: cloneVisibility,
         workspace_id: workspaceId,
       };

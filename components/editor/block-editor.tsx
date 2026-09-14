@@ -17,10 +17,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 
 import {
+  parseColumns,
   phaseTwoSlashItems,
   workspaceEditorSchema,
   type WorkspaceEditor,
 } from "@/components/editor/editor-schema";
+import { PageIcon } from "@/components/workspace/page-icon";
 import type { WorkspacePage } from "@/lib/types";
 
 import "@blocknote/core/fonts/inter.css";
@@ -190,7 +192,7 @@ export function BlockEditor({
       pages
         .filter((candidate) => !candidate.is_archived && candidate.id !== page.id)
         .map((candidate) => ({
-          icon: <span className="text-sm">{candidate.icon || "📄"}</span>,
+          icon: <span className="text-sm"><PageIcon icon={candidate.icon} /></span>,
           title: candidate.title,
           subtext: "Página de tu espacio",
           onItemClick: () => {
@@ -256,9 +258,10 @@ function blocksToPlainText(blocks: readonly unknown[]): string {
     const type = typeof block.type === "string" ? block.type : "";
 
     if (contentText) lines.push(contentText);
-    if (type === "columns" && props) {
-      if (typeof props.left === "string") lines.push(props.left);
-      if (typeof props.right === "string") lines.push(props.right);
+    if (type === "columns" && props && typeof props.columns === "string") {
+      for (const column of parseColumns(props.columns)) {
+        if (column.text) lines.push(column.text);
+      }
     }
     if (type === "subpage" && props && typeof props.title === "string") {
       lines.push(props.title);

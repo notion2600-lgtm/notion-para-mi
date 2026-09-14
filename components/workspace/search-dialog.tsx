@@ -3,6 +3,7 @@
 import { CornerDownLeft, FileText, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { PageIcon } from "@/components/workspace/page-icon";
 import { useWorkspaceSearch } from "@/hooks/use-workspace-search";
 import { getPagePath } from "@/lib/page-tree";
 import type { WorkspacePage } from "@/lib/types";
@@ -126,7 +127,7 @@ export function SearchDialog({
                 type="button"
               >
                 <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-white shadow-sm">
-                  {page.icon || <FileText className="size-4 text-zinc-400" />}
+                  {page.icon ? <PageIcon icon={page.icon} /> : <FileText className="size-4 text-zinc-400" />}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-zinc-900">{page.title}</span>

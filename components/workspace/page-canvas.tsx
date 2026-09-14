@@ -1,21 +1,20 @@
 "use client";
 
 import {
-  FileImage,
   FileText,
-  ImagePlus,
   Link2,
   Plus,
   RotateCcw,
   Settings2,
   Star,
   Trash2,
-  X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { PageHero } from "@/components/workspace/page-hero";
+import { PageIcon } from "@/components/workspace/page-icon";
 import type { WorkspacePage, WorkspaceSummary } from "@/lib/types";
 
 const BlockEditor = dynamic(
@@ -26,25 +25,6 @@ const BlockEditor = dynamic(
   },
 );
 
-const PAGE_EMOJIS = [
-  "📄",
-  "✨",
-  "💡",
-  "✅",
-  "🚀",
-  "🎯",
-  "📌",
-  "🧠",
-  "📚",
-  "💼",
-  "📊",
-  "🗓️",
-  "❤️",
-  "🔥",
-  "🌱",
-  "🧩",
-];
-
 export function PageCanvas({
   backlinks,
   onCreate,
@@ -54,6 +34,7 @@ export function PageCanvas({
   onUploadFile,
   page,
   pages,
+  propertiesPanel,
   readOnly = false,
   resolveFileUrl,
 }: {
@@ -65,38 +46,10 @@ export function PageCanvas({
   onUploadFile: (pageId: string, file: File) => Promise<string>;
   page: WorkspacePage | null;
   pages: WorkspacePage[];
+  propertiesPanel?: ReactNode;
   readOnly?: boolean;
   resolveFileUrl: (path: string) => Promise<string>;
 }) {
-  const [title, setTitle] = useState(page?.title ?? "");
-  const [iconOpen, setIconOpen] = useState(false);
-  const [coverUrl, setCoverUrl] = useState<string | null>(null);
-  const [coverPosition, setCoverPosition] = useState(50);
-  const [coverUploading, setCoverUploading] = useState(false);
-  const coverInput = useRef<HTMLInputElement>(null);
-
-  useEffect(() => setTitle(page?.title ?? ""), [page?.id, page?.title]);
-
-  useEffect(() => {
-    let active = true;
-    const storedPosition = page?.properties?._cover_position;
-    setCoverPosition(typeof storedPosition === "number" ? storedPosition : 50);
-    if (!page?.cover_url) {
-      setCoverUrl(null);
-      return;
-    }
-    void resolveFileUrl(page.cover_url)
-      .then((url) => {
-        if (active) setCoverUrl(url);
-      })
-      .catch(() => {
-        if (active) setCoverUrl(null);
-      });
-    return () => {
-      active = false;
-    };
-  }, [page?.cover_url, page?.id, page?.properties?._cover_position, resolveFileUrl]);
-
   if (!page) {
     return (
       <div className="mx-auto flex min-h-[70vh] max-w-xl flex-col items-center justify-center px-6 text-center">
@@ -115,134 +68,21 @@ export function PageCanvas({
     );
   }
 
-  function saveTitle() {
-    if (!page) return;
-    const nextTitle = title.trim() || "Sin título";
-    setTitle(nextTitle);
-    if (nextTitle !== page.title) onUpdate(page.id, { title: nextTitle });
-  }
-
-  async function uploadCover(file: File | undefined) {
-    if (!file || !page) return;
-    setCoverUploading(true);
-    try {
-      const path = await onUploadFile(page.id, file);
-      await onUpdate(page.id, { cover_url: path });
-    } catch {
-      // El hook de archivos ya muestra el detalle del error al usuario.
-    } finally {
-      setCoverUploading(false);
-      if (coverInput.current) coverInput.current.value = "";
-    }
-  }
-
-  function saveCoverPosition(value = coverPosition) {
-    if (!page) return;
-    void onUpdate(page.id, {
-      properties: { ...page.properties, _cover_position: value },
-    });
-  }
-
   return (
     <div className="pb-32">
-      {coverUrl && (
-        <div className="group relative h-56 w-full overflow-hidden bg-zinc-100">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            alt="Portada de la página"
-            className="h-full w-full object-cover"
-            src={coverUrl}
-            style={{ objectPosition: `center ${coverPosition}%` }}
-          />
-          {!readOnly && <div className="absolute bottom-3 right-4 flex items-center gap-2 rounded-lg bg-white/95 p-2 opacity-0 shadow-sm backdrop-blur transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-            <label className="flex items-center gap-2 text-xs font-medium text-zinc-600">
-              Posición
-              <input
-                aria-label="Posición vertical de la portada"
-                className="w-28 accent-indigo-600"
-                max="100"
-                min="0"
-                onChange={(event) => setCoverPosition(Number(event.target.value))}
-                onMouseUp={() => saveCoverPosition()}
-                onTouchEnd={() => saveCoverPosition()}
-                type="range"
-                value={coverPosition}
-              />
-            </label>
-            <button
-              aria-label="Quitar portada"
-              className="grid size-7 place-items-center rounded-md hover:bg-zinc-100"
-              onClick={() => void onUpdate(page.id, { cover_url: null })}
-              type="button"
-            >
-              <X className="size-3.5" />
-            </button>
-          </div>}
-        </div>
-      )}
-
-      <article className={`mx-auto w-full max-w-[900px] px-5 sm:px-12 ${coverUrl ? "pt-8 sm:pt-10" : "pt-12 sm:pt-20"}`}>
-        <div className="relative mb-4 w-fit">
-          <button
-            aria-expanded={iconOpen}
-            aria-label="Cambiar icono de página"
-            className="text-5xl leading-none transition-transform hover:scale-105"
-            disabled={readOnly}
-            onClick={() => setIconOpen((open) => !open)}
-            type="button"
-          >
-            {page.icon || "📄"}
-          </button>
-          {iconOpen && (
-            <div className="absolute left-0 top-14 z-30 grid w-64 grid-cols-8 gap-1 rounded-xl border bg-white p-3 shadow-xl">
-              {PAGE_EMOJIS.map((emoji) => (
-                <button
-                  className="grid size-7 place-items-center rounded-md text-lg hover:bg-zinc-100"
-                  key={emoji}
-                  onClick={() => {
-                    void onUpdate(page.id, { icon: emoji });
-                    setIconOpen(false);
-                  }}
-                  type="button"
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {!coverUrl && !readOnly && (
-          <button
-            className="mb-3 flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
-            disabled={coverUploading}
-            onClick={() => coverInput.current?.click()}
-            type="button"
-          >
-            {coverUploading ? <FileImage className="size-3.5 animate-pulse" /> : <ImagePlus className="size-3.5" />}
-            {coverUploading ? "Subiendo portada…" : "Añadir portada"}
-          </button>
-        )}
-        <input
-          accept="image/*"
-          className="hidden"
-          onChange={(event) => void uploadCover(event.target.files?.[0])}
-          ref={coverInput}
-          type="file"
-        />
-
-        <input
-          aria-label="Título de la página"
-          className="w-full border-none bg-transparent text-3xl font-bold tracking-[-0.035em] text-zinc-900 outline-none placeholder:text-zinc-300 sm:text-[40px] sm:leading-[1.2]"
-          onBlur={saveTitle}
-          onChange={(event) => setTitle(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") event.currentTarget.blur();
-          }}
-          placeholder="Sin título"
-          readOnly={readOnly}
-          value={title}
-        />
+      <PageHero
+        coverPath={page.cover_url}
+        icon={page.icon}
+        onUpdate={(changes) => onUpdate(page.id, changes)}
+        onUploadFile={(file) => onUploadFile(page.id, file)}
+        properties={page.properties}
+        readOnly={readOnly}
+        resolveFileUrl={resolveFileUrl}
+        title={page.title}
+        titleAriaLabel="Título de la página"
+      />
+      <article className="mx-auto w-full max-w-[900px] px-5 sm:px-12">
+        {propertiesPanel}
         <BlockEditor
           key={page.id}
           onCreateSubpage={onCreateSubpage}
@@ -310,7 +150,7 @@ export function TrashView({
         <div className="mt-10 divide-y rounded-xl border bg-white">
           {roots.map((page) => (
             <div className="flex items-center gap-3 px-4 py-3" key={page.id}>
-              <span className="text-lg">{page.icon || "📄"}</span>
+              <span className="text-lg"><PageIcon icon={page.icon} /></span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{page.title}</p>
                 <p className="text-xs text-zinc-400">
@@ -367,7 +207,7 @@ export function Backlinks({
             onClick={() => onOpenPage(page.id)}
             type="button"
           >
-            <span>{page.icon || "📄"}</span> {page.title}
+            <PageIcon icon={page.icon} /> {page.title}
           </button>
         ))}
       </div>

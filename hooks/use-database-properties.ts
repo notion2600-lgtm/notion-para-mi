@@ -26,6 +26,9 @@ const PROPERTY_NAMES: Record<DatabasePropertyType, string> = {
   relation: "Relación",
   created_time: "Creado",
   last_edited_time: "Última edición",
+  files: "Archivos",
+  created_by: "Creado por",
+  last_edited_by: "Editado por",
 };
 
 export const DATABASE_PROPERTY_TYPES = Object.entries(PROPERTY_NAMES).map(

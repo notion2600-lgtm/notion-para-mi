@@ -398,11 +398,11 @@ export function WorkspaceShell({
                   )}
                 </button>
                 <ShareButton
+                  invite={invite}
                   onMakeTeam={() => setPageVisibility(selectedPage.id, "team")}
                   pageId={selectedPage.id}
                   pageVisibility={selectedPage.visibility}
                   title={selectedPage.title}
-                  userId={userId}
                   workspace={workspace}
                 />
                 <FavoriteButton

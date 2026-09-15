@@ -7,26 +7,24 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { usePageShare } from "@/hooks/use-page-share";
-import { useWorkspaceTeam } from "@/hooks/use-workspace-team";
 import type { WorkspaceInvitation, WorkspacePage, WorkspaceSummary } from "@/lib/types";
 
 export function ShareButton({
+  invite,
   onMakeTeam,
   pageId,
   pageVisibility,
   title,
-  userId,
   workspace,
 }: {
+  invite: (email: string, role: "editor" | "viewer") => Promise<WorkspaceInvitation | null>;
   onMakeTeam: () => Promise<boolean>;
   pageId: string;
   pageVisibility: WorkspacePage["visibility"];
   title: string;
-  userId: string;
   workspace: WorkspaceSummary;
 }) {
   const { isLoading, publish, share, unpublish } = usePageShare(pageId);
-  const { invite } = useWorkspaceTeam({ userId, workspace });
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");

@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useComments } from "@/hooks/use-comments";
+import type { WorkspaceMember } from "@/lib/types";
 
 function formatCommentDate(iso: string) {
   return new Date(iso).toLocaleString("es", {
@@ -16,15 +17,23 @@ function formatCommentDate(iso: string) {
 }
 
 export function CommentsPanel({
+  members,
   onClose,
   pageId,
   userId,
+  userLabel,
 }: {
+  members: WorkspaceMember[];
   onClose: () => void;
   pageId: string;
   userId: string;
+  userLabel: string;
 }) {
-  const { addComment, comments, deleteComment, setResolved } = useComments(pageId);
+  const { addComment, comments, deleteComment, setResolved } = useComments(
+    pageId,
+    { id: userId, label: userLabel },
+    members,
+  );
   const [draft, setDraft] = useState("");
   const [showResolved, setShowResolved] = useState(false);
   const visible = comments.filter((comment) => showResolved || !comment.resolved);

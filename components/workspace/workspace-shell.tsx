@@ -122,7 +122,11 @@ export function WorkspaceShell({
     properties: rowProperties,
     updateProperty: updateRowDatabaseProperty,
   } = useDatabaseProperties(rowDatabaseId ?? "");
-  const { unresolvedCount: unresolvedComments } = useComments(selectedPage?.id ?? "");
+  const { unresolvedCount: unresolvedComments } = useComments(
+    selectedPage?.id ?? "",
+    { id: userId, label: email },
+    members,
+  );
   const breadcrumbs = selectedPage ? getPagePath(pages, selectedPage.id) : [];
   const backlinks = useMemo(
     () => (selectedPage ? getBacklinks(pages, selectedPage.id) : []),
@@ -569,9 +573,11 @@ export function WorkspaceShell({
       />
       {commentsOpen && selectedPage && (
         <CommentsPanel
+          members={members}
           onClose={() => setCommentsOpen(false)}
           pageId={selectedPage.id}
           userId={userId}
+          userLabel={email}
         />
       )}
     </div>

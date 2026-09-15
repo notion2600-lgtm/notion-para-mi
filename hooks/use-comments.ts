@@ -5,6 +5,7 @@ import { useEffect, useMemo } from "react";
 import { toast } from "sonner";
 
 import { createClient } from "@/lib/supabase/client";
+import type { WorkspaceMember } from "@/lib/types";
 
 export type PageComment = {
   id: string;
@@ -18,7 +19,21 @@ export type PageComment = {
   author_avatar: string | null;
 };
 
-export function useComments(pageId: string) {
+type RawComment = {
+  id: string;
+  page_id: string;
+  block_id: string | null;
+  user_id: string;
+  body: string;
+  resolved: boolean;
+  created_at: string;
+};
+
+export function useComments(
+  pageId: string,
+  currentUser?: { id: string; label: string },
+  members: WorkspaceMember[] = [],
+) {
   const supabase = useMemo(() => createClient(), []);
   const queryClient = useQueryClient();
   const queryKey = ["comments", pageId] as const;
@@ -28,24 +43,11 @@ export function useComments(pageId: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("comments")
-        .select("id, page_id, block_id, user_id, body, resolved, created_at, profiles(full_name, avatar_url)")
+        .select("id, page_id, block_id, user_id, body, resolved, created_at")
         .eq("page_id", pageId)
         .order("created_at", { ascending: true });
       if (error) throw error;
-      return (data ?? []).map((row) => {
-        const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
-        return {
-          author_avatar: (profile as { avatar_url: string | null } | null)?.avatar_url ?? null,
-          author_name: (profile as { full_name: string | null } | null)?.full_name || "Sin nombre",
-          block_id: row.block_id,
-          body: row.body,
-          created_at: row.created_at,
-          id: row.id,
-          page_id: row.page_id,
-          resolved: row.resolved,
-          user_id: row.user_id,
-        } satisfies PageComment;
-      });
+      return (data ?? []) as RawComment[];
     },
   });
 
@@ -104,7 +106,21 @@ export function useComments(pageId: string) {
     return true;
   }
 
-  const comments = query.data ?? [];
+  const comments = useMemo<PageComment[]>(
+    () =>
+      (query.data ?? []).map((row) => {
+        const isCurrentUser = currentUser && row.user_id === currentUser.id;
+        const member = members.find((item) => item.user_id === row.user_id);
+        return {
+          ...row,
+          author_avatar: member?.avatar_url ?? null,
+          author_name: isCurrentUser
+            ? currentUser.label
+            : member?.full_name || "Sin nombre",
+        };
+      }),
+    [currentUser, members, query.data],
+  );
 
   return {
     addComment,

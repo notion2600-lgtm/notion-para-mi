@@ -15,27 +15,31 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useWorkspaceTeam } from "@/hooks/use-workspace-team";
-import type { WorkspaceInvitation, WorkspaceSummary } from "@/lib/types";
+import type { WorkspaceInvitation, WorkspaceMember, WorkspaceSummary } from "@/lib/types";
 
 export function TeamSettings({
   email,
+  invitations,
+  invite,
+  isLoading,
+  members,
+  removeMember,
+  revokeInvitation,
+  updateMemberRole,
   userId,
   workspace,
 }: {
   email: string;
+  invitations: WorkspaceInvitation[];
+  invite: (email: string, role: "editor" | "viewer") => Promise<WorkspaceInvitation | null>;
+  isLoading: boolean;
+  members: WorkspaceMember[];
+  removeMember: (memberId: string) => Promise<boolean>;
+  revokeInvitation: (invitationId: string) => Promise<boolean>;
+  updateMemberRole: (memberId: string, role: "editor" | "viewer") => Promise<boolean>;
   userId: string;
   workspace: WorkspaceSummary;
 }) {
-  const {
-    invitations,
-    invite,
-    isLoading,
-    members,
-    removeMember,
-    revokeInvitation,
-    updateMemberRole,
-  } = useWorkspaceTeam({ userId, workspace });
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"editor" | "viewer">("editor");
   const [pending, setPending] = useState(false);

@@ -94,7 +94,15 @@ export function WorkspaceShell({
     isLoading: templatesLoading,
     templates,
   } = usePageTemplates(workspace.id, userId);
-  const { members } = useWorkspaceTeam({ userId, workspace });
+  const {
+    invitations,
+    invite,
+    isLoading: teamLoading,
+    members,
+    removeMember,
+    revokeInvitation,
+    updateMemberRole,
+  } = useWorkspaceTeam({ userId, workspace });
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -513,7 +521,18 @@ export function WorkspaceShell({
               templates={templates}
             />
           ) : view === "settings" ? (
-            <TeamSettings email={email} userId={userId} workspace={workspace} />
+            <TeamSettings
+              email={email}
+              invitations={invitations}
+              invite={invite}
+              isLoading={teamLoading}
+              members={members}
+              removeMember={removeMember}
+              revokeInvitation={revokeInvitation}
+              updateMemberRole={updateMemberRole}
+              userId={userId}
+              workspace={workspace}
+            />
           ) : selectedPage?.type === "database" ? (
             <DatabaseCanvas
               currentUser={{ id: userId, label: email }}
